@@ -10,6 +10,7 @@ import { prepareOrderShippedDocument } from './order-shipped-design';
 import { prepareOrderDeliveredDocument } from './order-delivered-design';
 import { prepareOrderReturnedDocument, RETURNED_SUBJECT } from './order-returned-design';
 import { readableReturnReason } from '../../shipping-tracking/return-reason';
+import { circleBenefitFields, normalizeCirclePromotionData, prepareCirclePromotionDocument } from './circle-promotion-design';
 import { prepareRestockDocument, RESTOCK_PHOTOS_HTML } from './restock-photos';
 import { prepareOrderConfirmationDocument, ORDER_CONFIRMATION_CSS, orderLogoHtml, ORDER_LOGO_LIGHT, mutedTaxColor, orderCanvas, orderCircle } from './order-confirmation-design';
 
@@ -245,6 +246,11 @@ export function renderMail(
   signature?: unknown,
   publishing = false,
 ) {
+  if (purpose === 'CIRCLE_PROMOTION') {
+    document = prepareCirclePromotionDocument(document);
+    if (signature) signature = prepareCirclePromotionDocument(signature);
+    if (data) data = normalizeCirclePromotionData(data);
+  }
   if (purpose === 'ORDER_CONFIRMATION') document = prepareOrderConfirmationDocument(document);
   if (purpose === 'ORDER_SHIPPED') document = prepareOrderShippedDocument(document);
   if (purpose === 'ORDER_DELIVERED') document = prepareOrderDeliveredDocument(document);
@@ -423,8 +429,9 @@ export function renderMail(
             throw new BadRequestException('Tipo de bloque no permitido.');
         }
         const row = `<tr><td${b.orderSurface ? ' class="order-surface"' : ''}${safeBackgroundImage ? ` background="${escape(safeBackgroundImage)}"` : ''} bgcolor="${fallbackBackground}" style="${style}">${content}</td></tr>`;
-        return purpose === 'RESTOCK' && (b.type === 'restockPhotos' || b.type === 'html') && b.condition === 'restockPhoto1'
-          ? `{{#if restockPhoto1}}${row}{{/if}}` : row;
+        return (purpose === 'RESTOCK' && (b.type === 'restockPhotos' || b.type === 'html') && b.condition === 'restockPhoto1') ||
+          (purpose === 'CIRCLE_PROMOTION' && b.type === 'text' && circleBenefitFields.includes(b.condition || ''))
+          ? `{{#if ${b.condition}}}${row}{{/if}}` : row;
       })
       .join('');
   };
@@ -474,7 +481,7 @@ export function renderMail(
       : s;
   body = cleanMailHtml(compile(body), !data);
   const header = compile(escape(preheader));
-  const pageBackground = imported ? doc.page!.background : '#111111';
+  const pageBackground = purpose === 'CIRCLE_PROMOTION' ? '#000000' : imported ? doc.page!.background : '#111111';
   let content = imported
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${pageBackground}" style="width:100%;margin:0;border:0;border-collapse:collapse;background-color:${pageBackground};"><tr><td align="center" bgcolor="${pageBackground}" style="padding:0;border:0;"><table role="presentation" align="center" width="${doc.page!.width}" cellpadding="0" cellspacing="0" border="0" bgcolor="${pageBackground}" style="width:100%;max-width:${doc.page!.width}px;border:0;border-collapse:collapse;background-color:${pageBackground};"><tr><td bgcolor="${pageBackground}" style="padding:0;border:0;">${body}</td></tr></table></td></tr></table>`
     : `<table${purpose === 'ORDER_CONFIRMATION' ? ' class="order-confirmation"' : ''} role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><table role="presentation" width="100%" style="width:100%;max-width:640px;border-collapse:collapse;">${body}</table></td></tr></table>`;

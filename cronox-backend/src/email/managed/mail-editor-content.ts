@@ -7,6 +7,7 @@ import { prepareOrderDeliveredDocument } from './order-delivered-design';
 import { prepareOrderReturnedDocument, RETURNED_SUBJECT, RETURNED_TITLE } from './order-returned-design';
 import { PASSWORD_RESET_COPY } from './password-reset-design';
 import { prepareRestockDocument } from './restock-photos';
+import { prepareCirclePromotionDocument } from './circle-promotion-design';
 
 // Copy from the transactional data producers. Only these fields are fixed for
 // a purpose; customer/event content in other purposes stays a real variable.
@@ -56,6 +57,10 @@ export function editableDraft<T extends { purpose?: string | null; document: unk
     copy.textOverride = null;
   }
   if (copy.purpose === 'RESTOCK') copy.document = prepareRestockDocument(copy.document);
+  if (copy.purpose === 'CIRCLE_PROMOTION') {
+    copy.document = prepareCirclePromotionDocument(copy.document);
+    copy.textOverride = null;
+  }
   const vocabulary = editorCopy(copy.purpose);
   const expand = (value: string, html = false) => value.replace(/\{\{\s*(\w+)\s*\}\}/g, (token, key) =>
     vocabulary[key] === undefined ? token : html ? Handlebars.escapeExpression(vocabulary[key]) : vocabulary[key]);

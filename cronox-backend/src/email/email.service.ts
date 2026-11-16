@@ -173,8 +173,7 @@ export class EmailService {
           text: Handlebars.compile(PASSWORD_RESET_TEXT, { noEscape: true })(data) }
         : null;
       if (purpose === 'CIRCLE_PROMOTION' && custom) {
-        const link = Handlebars.escapeExpression(String(data.actionUrl));
-        if (!custom.html.includes(`href="${link}"`)) custom = null;
+        if (!hasReturnedTrackingLink(custom.html, String(data.actionUrl))) custom = null;
       }
       const promotionFallback = !custom && purpose === 'CIRCLE_PROMOTION'
         ? renderMail(circlePromotionDocument(Number(data.circleLevel)), CIRCLE_PROMOTION_SUBJECT,
