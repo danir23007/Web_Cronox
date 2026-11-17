@@ -42,6 +42,7 @@
   const geometry = window.CRONOX_MEDIA_GEOMETRY;
   const pageDocument = window.document;
   const mobileQuery = window.matchMedia?.("(max-width: 767px)");
+  const compactMobileQuery = window.matchMedia?.("(max-width: 480px)");
   const tabletQuery = window.matchMedia?.("(max-width: 1023px)");
   const observedFrames = new WeakSet();
   const observedMedia = new WeakSet();
@@ -240,7 +241,17 @@
     const frameElement =
       element.closest(".hero-video-section") || element.parentElement;
     if (!frameElement) return null;
-    const result = geometry.apply(element, frameElement, currentFrame());
+    const framing = currentFrame();
+    const compactPhoto = compactMobileQuery?.matches &&
+      pageDocument.body?.classList.contains("page-home") &&
+      element instanceof HTMLImageElement;
+    frameElement.toggleAttribute("data-mobile-photo-framing", Boolean(compactPhoto));
+    // A landscape cover has no spare height in the portrait hero. Show more
+    // of the same photo at 80% scale, centered on its white canvas, without
+    // changing the hero box or the saved framing for larger viewports.
+    const result = geometry.apply(element, frameElement, compactPhoto
+      ? { ...framing, zoom: framing.zoom * 0.8, minZoom: 0.8, focalY: 50 }
+      : framing);
     if (!observedFrames.has(frameElement)) {
       observedFrames.add(frameElement);
       if (typeof ResizeObserver === "function") {
@@ -333,7 +344,7 @@
   configuration = readCache() || DEFAULT_CONFIGURATION;
   applyAll();
 
-  [mobileQuery, tabletQuery].forEach((query) => {
+  [mobileQuery, tabletQuery, compactMobileQuery].forEach((query) => {
     const reapply = () => applyAll();
     if (typeof query?.addEventListener === "function") {
       query.addEventListener("change", reapply);

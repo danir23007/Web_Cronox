@@ -660,6 +660,30 @@ const makePublicDom = (
 };
 
 describe('public hero framing', () => {
+  it.each([390, 480, 481, 1440])('opens up home photos only up to 480px (%ipx)', async width => {
+    const payload = { version: 5, placements: { 'home.hero.video': {
+      desktop: baseline, mobile: { ...baseline, focalY: 0 },
+      source: '/assets/hero.jpg', mediaType: 'image',
+    } } };
+    const { dom } = makePublicDom(jest.fn().mockResolvedValue(jsonResponse(payload)),
+      { width, height: 844 }, undefined, false,
+      page => page.window.document.body.classList.add('page-home'));
+    try {
+      await flushAsync(); await flushAsync();
+      const image = dom.window.document.querySelector('img')!;
+      const frame = dom.window.document.querySelector('section')!;
+      const expected = (dom.window as any).CRONOX_MEDIA_GEOMETRY.calculate({
+        frameWidth: width, frameHeight: 844, mediaWidth: 1920, mediaHeight: 1080,
+        ...baseline, focalY: width <= 480 ? 50 : width <= 767 ? 0 : 50,
+        zoom: width <= 480 ? 0.8 : 1, minZoom: width <= 480 ? 0.8 : 1,
+      });
+      expect(image.style.width).toBe(`${expected.renderedWidth}px`);
+      expect(image.style.transform).toBe(`translate3d(${expected.translateX}px, ${expected.translateY}px, 0)`);
+      expect(frame.hasAttribute('data-mobile-photo-framing')).toBe(width <= 480);
+      expect(JSON.parse(dom.window.localStorage.getItem('cronox.mediaFraming.web.v5')!).placements['home.hero.video'].mobile.zoom).toBe(1);
+    } finally { dom.window.close(); }
+  });
+
   it.each([
     ['customer', 'SUPERADMIN', 800, '700'],
     ['customer', undefined, 900, '700'],
@@ -992,7 +1016,7 @@ describe('public hero framing', () => {
 
   it('loads framing assets only on the homepage and leaves Products/Gallery untouched', () => {
     expect(indexHtml).toContain('media-framing-geometry.js?v=7');
-    expect(indexHtml).toContain('media-framing.js?v=9');
+    expect(indexHtml).toContain('media-framing.js?v=10');
     expect(indexHtml).toContain('responsive-images.js?v=7');
     expect(indexHtml).toContain('data-media-placement="home.hero.video"');
     expect(indexHtml).toContain('<img class="hero-video"');

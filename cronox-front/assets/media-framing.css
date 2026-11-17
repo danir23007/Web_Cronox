@@ -17,6 +17,12 @@
   will-change: transform;
 }
 
+@media (max-width: 480px) {
+  .page-home #hero[data-mobile-photo-framing] {
+    background: #fff;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-video[data-media-placement="home.hero.video"] {
     transition: none !important;

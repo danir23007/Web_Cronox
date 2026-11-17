@@ -431,6 +431,18 @@ html:not(.category-page) .page-home #hero + .store{padding-top:calc(20px + var(-
   .store > .store-heading{ margin:0 0 20px; }
   html:not(.category-page) .page-home #hero + .store{padding-top:calc(11px + var(--topbar-h)*0.125);}
   html.category-page .store{padding-top:calc(var(--topbar-h) + 18px);}
+
+  /* The fixed header overlays the home photo, so its height is already
+     included. Reserve the last 15% of the small viewport for Novedades. */
+  html:not(.category-page) .page-home #hero {
+    height:85vh;
+    height:85svh;
+    min-height:0;
+    margin-bottom:0;
+  }
+  html:not(.category-page) .page-home #hero + .store {
+    padding-top:16px;
+  }
 }
 
 /* ===== GRID ===== */
