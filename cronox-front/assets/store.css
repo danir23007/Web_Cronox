@@ -432,16 +432,19 @@ html:not(.category-page) .page-home #hero + .store{padding-top:calc(20px + var(-
   html:not(.category-page) .page-home #hero + .store{padding-top:calc(11px + var(--topbar-h)*0.125);}
   html.category-page .store{padding-top:calc(var(--topbar-h) + 18px);}
 
-  /* The fixed header overlays the home photo, so its height is already
-     included. Reserve the last 15% of the small viewport for Novedades. */
+  /* The header overlays the photo. Reserve 16px above the 29px heading and
+     its 20px bottom margin; the first product row starts 1px off-screen. */
   html:not(.category-page) .page-home #hero {
-    height:85vh;
-    height:85svh;
+    height:calc(100vh - 64px);
+    height:calc(100svh - 64px);
     min-height:0;
     margin-bottom:0;
   }
   html:not(.category-page) .page-home #hero + .store {
     padding-top:16px;
+  }
+  html:not(.category-page) .page-home #hero + .store > .store-heading {
+    line-height:29px;
   }
 }
 
