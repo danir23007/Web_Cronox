@@ -21,7 +21,7 @@
   <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=132">
   <link rel="stylesheet" href="assets/gallery.css?v=20">
   <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
-  <link rel="stylesheet" href="assets/admin-media.css?v=4">
+  <link rel="stylesheet" href="assets/admin-media.css?v=5">
   <link rel="stylesheet" href="assets/admin-lots.css?v=3">
   <link rel="stylesheet" href="assets/admin-inventory.css?v=2">
   <link rel="stylesheet" href="assets/waitlist.css?v=4">
@@ -1987,6 +1987,7 @@
           <p id="mediaPreviewDimensions" class="media-editor__dimensions">Viewport de escritorio</p>
           <div id="mediaPreviewStage" class="media-editor__preview-stage">
             <div id="mediaPreviewFrame" class="media-editor__preview" tabindex="0" aria-label="Previsualizaci&oacute;n del hero; arrastra para mover el contenido" aria-describedby="mediaPreviewDimensions mediaMovementStatus mediaPreviewHelp">
+              <iframe id="mediaStorefrontPreview" title="Portada real de CRONOX" hidden></iframe>
               <img id="mediaPreviewImage" alt="" draggable="false" hidden>
               <video id="mediaPreviewVideo" muted playsinline loop preload="metadata" draggable="false" hidden></video>
               <span id="mediaPreviewEmpty" class="media-editor__empty">No hay un archivo disponible para previsualizar.</span>
@@ -1997,7 +1998,7 @@
             </div>
           </div>
           <p id="mediaMovementStatus" class="media-editor__movement" role="status" aria-live="polite"></p>
-          <p id="mediaPreviewHelp" class="media-editor__help">Arrastra dentro del viewport para cambiar la posici&oacute;n. El archivo original nunca se modifica.</p>
+          <p id="mediaPreviewHelp" class="media-editor__help">Ajusta la imagen con los controles y despl&aacute;zate dentro de la vista previa para revisar Novedades y los productos. Los cambios solo se publican al guardar.</p>
           <button id="mediaVideoToggle" class="btn media-editor__video-toggle" type="button" hidden>Reproducir v&iacute;deo</button>
         </div>
 
@@ -2220,7 +2221,7 @@
   <script src="assets/key-screen-renderer.js?v=2"></script>
   <script src="assets/key-screen-time.js?v=1"></script>
   <script src="assets/admin-key-screen.js?v=5"></script>
-  <script src="assets/admin-media.js?v=5"></script>
+  <script src="assets/admin-media.js?v=6"></script>
   <script src="assets/admin-newsletter.js?v=5"></script>
   <script src="assets/admin-footer.js?v=2"></script>
   <script src="assets/admin-accreditations.js?v=5"></script>

@@ -1,5 +1,6 @@
 (function () {
   "use strict";
+  if (window.parent && window.parent !== window && new URLSearchParams(location.search).get('mediaPreview') === '1') return;
 
   const CONSENT_VERSION = "2";
   const SESSION_KEY = "cronox_analytics_session";

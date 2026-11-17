@@ -20,6 +20,7 @@ import {
 } from './media-placement.registry';
 
 type NullableFrameFields = {
+  framingVersion?: number;
   focalX: number;
   focalY: number;
   zoom: number;
@@ -351,6 +352,7 @@ export class MediaFramingService {
             const media = this.resolveMedia(definition, record);
             return {
               ...this.resolveFrames(definition, record),
+              framingVersion: record?.framingVersion ?? 1,
               ...(definition.key === 'home.hero.video'
                 ? { heroText: resolveHeroText(record) }
                 : {}),
@@ -398,6 +400,7 @@ export class MediaFramingService {
           defaults: { ...definition.defaults },
           status: statusFor(framing, definition.defaults),
           framing,
+          framingVersion: record?.framingVersion ?? 1,
           ...(definition.key === 'home.hero.video'
             ? {
                 heroText: resolveHeroText(record),
@@ -644,6 +647,7 @@ export class MediaFramingService {
       adminId,
       false,
       dto.heroText,
+      dto.framingVersion ?? 1,
     );
     return this.getAdminPlacement(key);
   }
@@ -672,8 +676,10 @@ export class MediaFramingService {
     adminId: number | undefined,
     reset: boolean,
     heroText?: UpdateMediaFramingDto['heroText'],
+    framingVersion = 1,
   ) {
     const fields = {
+      framingVersion,
       ...writeFields(frames),
       ...(key === 'home.hero.video' ? heroTextFields(heroText) : {}),
     };
@@ -683,7 +689,9 @@ export class MediaFramingService {
           where: { key },
         });
         const currentRevision = current?.revision ?? 0;
-        if (currentRevision !== expectedRevision) throw new ConflictException();
+        if (currentRevision !== expectedRevision ||
+            ((current?.framingVersion ?? 1) >= 2 && framingVersion < 2 && !reset))
+          throw new ConflictException();
 
         let revision: number;
         if (current) {

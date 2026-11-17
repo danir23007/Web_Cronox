@@ -263,10 +263,10 @@ describe('cookie consent frontend', () => {
     for (const page of publicPages) {
       const html = readFileSync(path.join(frontendRoot, page), 'utf8');
       expect(html).toContain('assets/cookie-consent.css?v=2');
-      expect(html).toContain('assets/cookie-consent.js?v=9');
+      expect(html).toContain(`assets/cookie-consent.js?v=${page === 'index.html' ? 10 : 9}`);
       // Secure access/launch pages use only aggregate presence, never historical URLs.
       if (!['newsletter-access.html', 'launch.html', 'email-change.html'].includes(page)) {
-        expect(html).toContain('assets/customer-analytics.js?v=2');
+        expect(html).toContain(`assets/customer-analytics.js?v=${page === 'index.html' ? 3 : 2}`);
       }
     }
     expect(consentSource).toContain('if (!current) showBanner();');

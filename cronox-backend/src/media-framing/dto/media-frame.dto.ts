@@ -100,6 +100,11 @@ export class HeroTextDto {
 }
 
 export class UpdateMediaFramingDto {
+  @IsOptional()
+  @IsInt()
+  @IsIn([1, 2])
+  framingVersion?: number;
+
   @ValidateNested()
   @Type(() => MediaFrameDto)
   desktop!: MediaFrameDto;

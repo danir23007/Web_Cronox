@@ -70,11 +70,12 @@ async function bootstrap() {
   }
 
   app.use((req, res, next) => {
-    const documentPolicy = documentSecurityHeaders(contentSecurityPolicy, req.path);
+    const mediaPreview = req.path === '/' && req.query.mediaPreview === '1';
+    const documentPolicy = documentSecurityHeaders(contentSecurityPolicy, req.path, mediaPreview);
     res.setHeader('Content-Security-Policy', documentPolicy.contentSecurityPolicy);
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Frame-Options', mediaPreview ? 'SAMEORIGIN' : 'DENY');
     res.setHeader(
       'Permissions-Policy',
       documentPolicy.permissionsPolicy,

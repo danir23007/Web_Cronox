@@ -361,6 +361,23 @@
 .media-editor__preview.is-dragging {
   cursor: grabbing;
 }
+
+.media-editor__preview.is-live {
+  border: 0;
+  outline: 1px solid rgba(255,255,255,.55);
+  cursor: auto;
+  touch-action: auto;
+}
+.media-editor__preview.is-live > :not(iframe) { display: none !important; }
+#mediaStorefrontPreview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  background: #000;
+}
 .media-editor__preview:focus-within {
   outline: 2px solid #fff;
   outline-offset: 3px;

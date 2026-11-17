@@ -85,4 +85,11 @@ describe('content security policy helpers', () => {
       expect(policy.contentSecurityPolicy).toBe(base);
     }
   });
+
+  it('allows only the explicit home preview to be embedded by the same origin', () => {
+    const base = createContentSecurityPolicy(frontendRoot);
+    expect(documentSecurityHeaders(base, '/', true).contentSecurityPolicy).toContain("frame-ancestors 'self'");
+    expect(documentSecurityHeaders(base, '/admin.html', true).contentSecurityPolicy).toContain("frame-ancestors 'none'");
+    expect(documentSecurityHeaders(base, '/').contentSecurityPolicy).toContain("frame-ancestors 'none'");
+  });
 });

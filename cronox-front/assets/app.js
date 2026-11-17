@@ -3472,6 +3472,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const initNewsletterModal = () => {
+    if (window.parent !== window && new URLSearchParams(location.search).get('mediaPreview') === '1') return;
     if (newsletterState.initialized) return;
     newsletterState.initialized = true;
     newsletterState.overlay = document.querySelector('.newsletter-modal-overlay');

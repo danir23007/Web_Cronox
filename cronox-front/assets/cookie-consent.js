@@ -1,5 +1,6 @@
 (function () {
   "use strict";
+  if (window.parent && window.parent !== window && new URLSearchParams(location.search).get('mediaPreview') === '1') return;
 
   const CONSENT_COOKIE_NAME = "cronox_cookie_consent";
   const COOKIE_CONSENT_VERSION = "2";

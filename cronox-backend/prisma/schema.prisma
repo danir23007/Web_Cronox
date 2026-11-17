@@ -881,6 +881,7 @@ model GallerySlot {
 }
 
 model WebsiteMediaPlacement {
+  framingVersion              Int                @default(1)
   key                         String             @id
   assetId                     String?
   focalX                      Float

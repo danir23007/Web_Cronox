@@ -63,6 +63,7 @@ export const createContentSecurityPolicy = (frontendRoot: string): string => {
 export function documentSecurityHeaders(
   basePolicy: string,
   requestPath: string,
+  mediaPreview = false,
 ) {
   const qrAdmin = requestPath.split('?')[0] === '/admin.html';
   return {
@@ -71,7 +72,9 @@ export function documentSecurityHeaders(
           "script-src 'self'",
           "script-src 'self' 'wasm-unsafe-eval'",
         )
-      : basePolicy,
+      : mediaPreview && requestPath === '/'
+        ? basePolicy.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+        : basePolicy,
     permissionsPolicy: `camera=${qrAdmin ? '(self)' : '()'}, geolocation=(), microphone=()`,
   };
 }

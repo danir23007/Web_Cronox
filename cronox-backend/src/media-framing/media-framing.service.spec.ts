@@ -97,6 +97,7 @@ describe('MediaFramingService', () => {
 
     expect(Object.keys(publicResponse.placements)).toEqual(['home.hero.video']);
     expect(publicResponse.placements['home.hero.video']).toEqual({
+      framingVersion: 1,
       desktop: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
       tablet: null,
       mobile: null,
@@ -149,6 +150,20 @@ describe('MediaFramingService', () => {
       action: 'media.framing.update',
       targetId: 'home.hero.video',
     });
+  });
+
+  it('rejects an old editor after the placement has adopted editable mobile framing', async () => {
+    await service.updatePlacement('home.hero.video', {
+      desktop: { focalX: 50, focalY: 48, zoom: 1, fit: MediaFitMode.COVER },
+      mobile: { focalX: 48, focalY: 50, zoom: 1, fit: MediaFitMode.COVER },
+      framingVersion: 2, expectedRevision: 0,
+    });
+    await expect(service.updatePlacement('home.hero.video', {
+      desktop: { focalX: 50, focalY: 48, zoom: 1, fit: MediaFitMode.COVER },
+      mobile: { focalX: 48, focalY: 0, zoom: 1, fit: MediaFitMode.COVER },
+      expectedRevision: 1,
+    })).rejects.toBeInstanceOf(ConflictException);
+    expect(websiteRecords[0].mobileFocalY).toBe(50);
   });
 
   it('creates, edits, disables and removes plain hero text with independent mobile positioning', async () => {

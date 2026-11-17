@@ -48,6 +48,12 @@
   const observedMedia = new WeakSet();
   let configuration = DEFAULT_CONFIGURATION;
   let requestPromise = null;
+  const previewToken = new URLSearchParams(window.location.search).get('previewToken');
+  const previewMode = window.parent !== window &&
+    new URLSearchParams(window.location.search).get('mediaPreview') === '1' &&
+    /^[a-z0-9-]{16,80}$/i.test(previewToken || '');
+  let previewConfiguration = null;
+  let lastGeometry = null;
 
   const safeMediaUrl = (value) => {
     if (typeof value !== "string" || !value.trim()) return null;
@@ -145,6 +151,7 @@
       version: 5,
       placements: {
         [HERO_KEY]: {
+          framingVersion: value.framingVersion === 2 ? 2 : 1,
           desktop,
           tablet: validFrame(value?.tablet),
           mobile: validFrame(value?.mobile),
@@ -250,8 +257,10 @@
     // of the same photo at 80% scale, centered on its white canvas, without
     // changing the hero box or the saved framing for larger viewports.
     const result = geometry.apply(element, frameElement, compactPhoto
-      ? { ...framing, zoom: framing.zoom * 0.8, minZoom: 0.8, focalY: 50 }
+      ? { ...framing, zoom: framing.zoom * 0.8, minZoom: 0.8,
+          focalY: configuration.placements[HERO_KEY].framingVersion === 2 ? framing.focalY : 50 }
       : framing);
+    lastGeometry = result;
     if (!observedFrames.has(frameElement)) {
       observedFrames.add(frameElement);
       if (typeof ResizeObserver === "function") {
@@ -271,6 +280,10 @@
     const element = ensureHeroElement();
     if (element) applyHero(element);
     ensureHeroText();
+    if (previewMode) window.parent.postMessage({
+      type: 'cronox:media-preview:state', token: previewToken,
+      geometry: lastGeometry, width: window.innerWidth, height: window.innerHeight,
+    }, window.location.origin);
     pageDocument.documentElement.dataset.mediaFramingState =
       configuration === DEFAULT_CONFIGURATION ? "default" : "ready";
   };
@@ -321,8 +334,8 @@
       .then((payload) => {
         const normalized = normalizeConfiguration(payload);
         if (!normalized) throw new Error("Invalid media framing response");
-        configuration = normalized;
-        writeCache(normalized);
+        configuration = previewConfiguration || normalized;
+        if (!previewMode) writeCache(normalized);
         applyAll();
         pageDocument.dispatchEvent(
           new CustomEvent("cronox:media-framing-ready"),
@@ -330,8 +343,8 @@
         return normalized;
       })
       .catch(() => {
-        configuration = DEFAULT_CONFIGURATION;
-        clearCache();
+        configuration = previewConfiguration || DEFAULT_CONFIGURATION;
+        if (!previewMode) clearCache();
         applyAll();
         pageDocument.dispatchEvent(
           new CustomEvent("cronox:media-framing-error"),
@@ -341,7 +354,29 @@
     return requestPromise;
   };
 
-  configuration = readCache() || DEFAULT_CONFIGURATION;
+  if (previewMode) {
+    pageDocument.documentElement.dataset.mediaPreview = 'true';
+    // The preview remains scrollable and uses the real navigation chrome,
+    // but cannot submit forms or modify a customer's basket/favorites.
+    pageDocument.addEventListener('submit', event => { event.preventDefault(); event.stopImmediatePropagation(); }, true);
+    pageDocument.addEventListener('click', event => {
+      if (event.target?.closest?.('a,.fav-add,.favorite-toggle,.product-restock button')) {
+        event.preventDefault(); event.stopImmediatePropagation();
+      }
+    }, true);
+    window.addEventListener('message', event => {
+      if (event.origin !== window.location.origin || event.source !== window.parent ||
+          event.data?.type !== 'cronox:media-preview:configure' || event.data.token !== previewToken) return;
+      const next = normalizeConfiguration(event.data.configuration);
+      if (!next) return;
+      previewConfiguration = next;
+      configuration = next;
+      applyAll();
+      if (event.data.resetScroll) window.requestAnimationFrame(() => window.scrollTo(0, 0));
+    });
+    window.parent.postMessage({ type: 'cronox:media-preview:ready', token: previewToken }, window.location.origin);
+  }
+  configuration = (!previewMode && readCache()) || DEFAULT_CONFIGURATION;
   applyAll();
 
   [mobileQuery, tabletQuery, compactMobileQuery].forEach((query) => {

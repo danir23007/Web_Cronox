@@ -95,12 +95,15 @@ const defineImageDimensions = (dom: JSDOM) => {
   );
 };
 
-const makeAdminDom = () => {
+const makeAdminDom = (livePreview = false) => {
   const dom = new JSDOM(adminHtml, {
     url: 'https://admin.example.test/admin.html',
     runScripts: 'outside-only',
     pretendToBeVisual: true,
   });
+  // Keep isolated legacy geometry/drag coverage; the live iframe path is
+  // covered separately below and against the real local application.
+  if (!livePreview) dom.window.document.getElementById('mediaStorefrontPreview')?.remove();
   let placement: Omit<typeof initialPlacement, 'poster'> & { poster: string | null; activeAssetId?: string | null } = structuredClone(initialPlacement);
   const writes: Array<{ url: string; method: string; body: any }> = [];
   const fetchMock = jest.fn(async (url: string, options: any = {}) => {
@@ -275,6 +278,22 @@ const pointerEvent = (
 };
 
 describe('Multimedia Web admin manager', () => {
+  it('renders the real page in a viewport-sized iframe and does not write on a no-op save', async () => {
+    const { dom, writes } = makeAdminDom(true);
+    try {
+      await openHeroEditor(dom);
+      const iframe = dom.window.document.getElementById('mediaStorefrontPreview') as HTMLIFrameElement;
+      expect(iframe.src).toContain('/?mediaPreview=1&previewToken=');
+      expect(iframe.style.width).toBe('1440px');
+      expect(iframe.style.height).toBe('900px');
+      (dom.window.document.querySelector('[data-media-device="mobile"]') as HTMLElement).click();
+      expect(iframe.style.width).toBe('390px');
+      expect(iframe.style.height).toBe('844px');
+      (dom.window.document.getElementById('mediaEditorSave') as HTMLElement).click();
+      await flushAsync();
+      expect(writes).toHaveLength(0);
+    } finally { dom.window.close(); }
+  });
   it('uses the corrected visible name, hero viewport UI, and shared engine', () => {
     const dom = new JSDOM(adminHtml, { runScripts: 'outside-only' });
     dom.window.eval(readFrontend('assets/admin-navigation.js'));
@@ -1016,7 +1035,7 @@ describe('public hero framing', () => {
 
   it('loads framing assets only on the homepage and leaves Products/Gallery untouched', () => {
     expect(indexHtml).toContain('media-framing-geometry.js?v=7');
-    expect(indexHtml).toContain('media-framing.js?v=10');
+    expect(indexHtml).toContain('media-framing.js?v=11');
     expect(indexHtml).toContain('responsive-images.js?v=7');
     expect(indexHtml).toContain('data-media-placement="home.hero.video"');
     expect(indexHtml).toContain('<img class="hero-video"');

@@ -23,6 +23,13 @@
   }
 }
 
+/* Touch viewports use overlay scrollbars. Reproduce their content width when
+   the same page is embedded in a desktop administrator's browser. */
+@media (max-width: 1023px) {
+  html[data-media-preview] { scrollbar-gutter: auto; scrollbar-width: none; }
+  html[data-media-preview]::-webkit-scrollbar { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-video[data-media-placement="home.hero.video"] {
     transition: none !important;

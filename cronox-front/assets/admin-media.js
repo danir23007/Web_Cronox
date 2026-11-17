@@ -28,6 +28,7 @@
     inherit: document.getElementById("mediaInheritGeneral"),
     previewStage: document.getElementById("mediaPreviewStage"),
     preview: document.getElementById("mediaPreviewFrame"),
+    storefront: document.getElementById("mediaStorefrontPreview"),
     dimensions: document.getElementById("mediaPreviewDimensions"),
     movement: document.getElementById("mediaMovementStatus"),
     heroChrome: document.getElementById("mediaHeroChrome"),
@@ -86,6 +87,10 @@
     textDrag: null,
     geometry: null,
     previewSize: null,
+    framingVersion: 1,
+    previewToken: null,
+    previewReady: false,
+    previewDevice: null,
     resizeFrame: 0,
     folders: [],
     libraryPromise: null,
@@ -619,9 +624,11 @@
 
   const currentFrame = () => {
     if (!state.draft) return null;
-    return state.device === "desktop"
+    const frame = state.device === "desktop"
       ? state.draft.desktop
       : state.draft[state.device] || state.draft.desktop;
+    return state.device === 'mobile' && state.framingVersion < 2 && state.placement?.mediaType === 'image'
+      ? { ...frame, focalY: 50 } : frame;
   };
 
   const isInherited = () =>
@@ -728,6 +735,26 @@
           ? "Tablet"
           : "M\u00f3vil";
     elements.dimensions.textContent = `${deviceLabel} \u00b7 ${viewport.width} \u00d7 ${viewport.height} px`;
+    if (elements.storefront && state.placement?.key === 'home.hero.video') {
+      elements.storefront.style.width = `${viewport.width}px`;
+      elements.storefront.style.height = `${viewport.height}px`;
+      elements.storefront.style.transform = `scale(${size.width / viewport.width})`;
+      if (state.previewReady) elements.storefront.contentWindow?.postMessage({
+        type: 'cronox:media-preview:configure', token: state.previewToken,
+        resetScroll: state.previewDevice !== state.device,
+        configuration: { version: 5, placements: { 'home.hero.video': {
+          ...state.draft, framingVersion: state.framingVersion,
+          source: state.placement.source, variants: state.placement.variants,
+          mediaType: state.placement.mediaType, poster: state.placement.poster,
+          heroText: state.heroText,
+        } } },
+      }, window.location.origin);
+      if (state.previewReady) state.previewDevice = state.device;
+      elements.movement.textContent = state.previewReady
+        ? 'Portada real. Desplázate dentro de la vista previa para ver los productos.'
+        : 'Cargando la portada real…';
+      return state.geometry;
+    }
     renderHeroText(viewport, size);
     if (!frame || !media || !geometryEngine || media.hidden) {
       state.geometry = null;
@@ -836,6 +863,30 @@
     syncControls();
   };
 
+  const receivePreview = event => {
+    if (event.origin !== window.location.origin ||
+        event.source !== elements.storefront?.contentWindow ||
+        event.data?.token !== state.previewToken || !state.placement) return;
+    if (event.data.type === 'cronox:media-preview:ready') {
+      state.previewReady = true;
+      renderPreview();
+    } else if (event.data.type === 'cronox:media-preview:state') {
+      state.previewReady = true;
+      state.geometry = event.data.geometry;
+      const inherited = isInherited();
+      elements.focalX.disabled = inherited || !state.geometry?.movementX;
+      elements.focalY.disabled = inherited || !state.geometry?.movementY;
+      elements.movement.textContent = 'Portada real. Desplázate dentro de la vista previa para ver los productos.';
+    }
+  };
+  window.addEventListener('message', receivePreview);
+  elements.storefront?.addEventListener('load', () => {
+    if (state.placement && state.previewToken) {
+      state.previewReady = true;
+      renderPreview();
+    }
+  });
+
   const preparePreview = () => {
     const source = safeMediaUrl(state.placement?.source);
     elements.image.hidden = true;
@@ -848,6 +899,15 @@
     elements.image.removeAttribute("src");
     geometryEngine?.clear(elements.video, elements.preview);
     geometryEngine?.clear(elements.image, elements.preview);
+    if (elements.storefront && state.placement?.key === 'home.hero.video') {
+      state.previewToken = window.crypto?.randomUUID?.() || `preview-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      state.previewReady = false;
+      state.previewDevice = null;
+      elements.preview.classList.add('is-live');
+      elements.storefront.hidden = false;
+      elements.storefront.src = `/?mediaPreview=1&previewToken=${encodeURIComponent(state.previewToken)}`;
+      return;
+    }
     if (!source) return;
     if (state.placement.mediaType === "video") {
       elements.video.src = source;
@@ -881,8 +941,15 @@
     }
     state.placement = placement;
     state.draft = clone(placement.framing);
+    state.framingVersion = placement.framingVersion || 1;
+    // Legacy public photos always centered the mobile Y axis. Adopt that
+    // effective value in the draft, never by writing on open or no-op save.
+    if (state.framingVersion < 2 && placement.mediaType === 'image' && state.draft.mobile) {
+      state.draft.mobile.focalY = 50;
+      state.framingVersion = 2;
+    }
     state.heroText = clone(placement.heroText || placement.heroTextDefaults || defaultHeroText());
-    state.initial = clone({ framing: placement.framing, heroText: state.heroText });
+    state.initial = clone({ framing: state.draft, heroText: state.heroText });
     state.device = "desktop";
     state.resetAll = false;
     state.geometry = null;
@@ -912,6 +979,11 @@
     elements.video.pause();
     elements.video.removeAttribute("src");
     elements.image.removeAttribute("src");
+    elements.storefront?.removeAttribute('src');
+    if (elements.storefront) elements.storefront.hidden = true;
+    elements.preview.classList.remove('is-live');
+    state.previewReady = false;
+    state.previewToken = null;
     elements.modal.classList.remove("show");
     elements.modal.setAttribute("aria-hidden", "true");
     pageDocument.body.style.overflow = "";
@@ -957,6 +1029,7 @@
 
   const save = async () => {
     if (!state.placement || !state.draft || state.saving) return;
+    if (!dirty()) { closeEditor(true); return; }
     state.saving = true;
     elements.save.disabled = true;
     elements.cancel.disabled = true;
@@ -979,6 +1052,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...state.draft,
+              framingVersion: state.framingVersion,
               ...(state.placement.key === "home.hero.video" ? { heroText: state.heroText } : {}),
               expectedRevision: state.placement.revision,
             }),
@@ -1050,9 +1124,11 @@
   );
   elements.inherit.addEventListener("change", () => {
     if (!state.draft || state.device === "desktop") return;
+    const inheritedFrame = currentFrame();
     state.draft[state.device] = elements.inherit.checked
       ? null
-      : clone(state.draft.desktop);
+      : clone(inheritedFrame);
+    if (state.device === 'mobile') state.framingVersion = 2;
     state.resetAll = false;
     syncControls();
   });
