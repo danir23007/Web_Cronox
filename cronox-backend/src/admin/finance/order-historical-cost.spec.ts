@@ -10,7 +10,7 @@ function fixture(cost: number | null = 1375) {
   const part = { lotId:'original',sliceId:'opening-M',quantity:1,productionCents:null,freightCents:null,otherCents:null,quality:'UNKNOWN' };
   const order: FinanceOrder = { id:901,status:'PAID',currency:'EUR',providerRef:null,source:'IN_PERSON_ADMIN',paidAt:null,purchasedAt:at,createdAt:at,voidedAt:null,total:'30.00',shippingCost:0,discountCents:0,disputeLostCents:0,stockMovements:[],items:[{id:902,productId:903,variantId:904,title:'Original (M)',quantity:1,lineTotal:'30.00',financialSnapshot:{unitCostCents:null,productName:'Original',imageUrl:null,lotCosts:[part]}}] };
   const lot: any = {id:'original',number:1,openingBalance:true,createdAt:new Date('2026-11-04'),receivedAt:null,costQuality:'UNKNOWN',profile:{unitCostCents:cost},history:[{id:'dated-evidence',createdAt:new Date('2026-11-04T03:15:00Z'),before:{profile:{unitCostCents:cost}},after:{profile:{unitCostCents:cost}}}],slices:[{id:'opening-M',variantId:904,received:9,available:6,productionCents:null,freightCents:null,otherCents:null}]};
-  const db: any = { inventoryLot:{findMany:jest.fn(async()=>[lot])} };
+  const db: any = { registerSale:{findMany:jest.fn(async()=>[])}, afterSaleOperation:{findMany:jest.fn(async()=>[])}, inventoryLot:{findMany:jest.fn(async()=>[lot])} };
   return {order,lot,part,db};
 }
 const report = (order: FinanceOrder) => calculateFinance([order],[],'2026-10-18','2026-11-16','days');

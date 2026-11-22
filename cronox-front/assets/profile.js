@@ -475,6 +475,11 @@
         trackingBits.unshift(escapeHtml(fallback));
       }
 
+      if(order.purchaseUnits)trackingBits.push(escapeHtml('Compradas '+order.purchaseUnits.bought+' · Devueltas '+order.purchaseUnits.returned+' · Conservadas '+order.purchaseUnits.held));
+      for(const operation of order.afterSales||[]) {
+        trackingBits.push(escapeHtml((operation.kind==='RETURN'?'Devolución':'Cambio de talla')+' · '+formatDate(operation.occurredAt)+' · '+(operation.refundCents/100).toLocaleString('es-ES',{style:'currency',currency:'EUR'})));
+        for(const unit of operation.units||[])trackingBits.push(escapeHtml(unit.name+' · '+(operation.kind==='RETURN'?'Devuelta 1 unidad de talla '+(unit.fromSize||'sin datos'):(unit.fromSize||'sin datos')+' → '+unit.toSize)));
+      }
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Pedido">#${orderId}</td>

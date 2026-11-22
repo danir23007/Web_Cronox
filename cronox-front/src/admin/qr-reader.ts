@@ -5,7 +5,7 @@ const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src || n
 const wasmUrl = new URL('./zxing_reader.wasm', scriptUrl).href;
 let ready: Promise<unknown> | undefined;
 
-export async function createReader() {
+export async function createReader(format: 'QRCode' | 'Code128' = 'QRCode') {
   if (!ready) ready = prepareZXingModule({
     fireImmediately: true,
     overrides: { locateFile: () => wasmUrl },
@@ -16,7 +16,7 @@ export async function createReader() {
       const context = canvas.getContext('2d', { willReadFrequently: true });
       if (!context) throw new Error('Canvas no disponible');
       const image = context.getImageData(0, 0, canvas.width, canvas.height);
-      const results = await readBarcodes(image, { formats: ['QRCode'], tryHarder: true, maxNumberOfSymbols: 1 });
+      const results = await readBarcodes(image, { formats: [format], tryHarder: true, maxNumberOfSymbols: 1 });
       return results.find(result => result.isValid)?.text;
     },
   };

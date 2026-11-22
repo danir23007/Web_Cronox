@@ -55,6 +55,7 @@ export type FinanceLine = {
   financialSnapshot?: { unitCostCents: number | null; productName: string; imageUrl: string | null; lotCosts?: FrozenLotCost[] | null } | null;
 };
 export type FinanceOrder = {
+  afterSales?: {occurredAt:Date;refundCents:number;lines:import('../points/point-calculations').PointDelta[]}[];
   excludedFromStatistics?: boolean;
   historicalQualified?: boolean;
   id: number; status: string; currency: string; providerRef: string | null; source: string;
@@ -64,6 +65,8 @@ export type FinanceOrder = {
   stockMovements: { variantId: number; delta: number; reason: string | null; createdAt: Date }[];
 };
 export type FinanceEvent = {
+  matchedManualCents?: number;
+  ambiguousAfterSaleRefund?: boolean;
   id: string; type: string; paymentIntentId: string | null; occurredAt: Date; lifecycleStatus: string | null;
   refundCumulativeCents: number | null; amountCents: number | null;
 };
@@ -146,7 +149,7 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
     let previousRefund = 0;
     let refundUnknown = false;
     const refundEvents = ledger.filter(e => e.type === 'charge.refunded');
-    const refunds = refundEvents.map(event => ({ date: event.occurredAt, amount: event.refundCumulativeCents ?? (event.lifecycleStatus === 'REFUNDED' ? total : null) }));
+    const refunds = refundEvents.map(event => ({ date: event.occurredAt, amount: event.ambiguousAfterSaleRefund ? null : event.refundCumulativeCents == null ? (event.lifecycleStatus === 'REFUNDED' ? total-(event.matchedManualCents??0) : null) : event.refundCumulativeCents-(event.matchedManualCents??0) }));
     if (order.voidedAt) refunds.push({ date: order.voidedAt, amount: total });
     if (order.status === 'REFUNDED' && !refundEvents.length) {
       // Never fabricate a refund date from updatedAt (fulfillment edits can change it).
@@ -205,7 +208,12 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
       const date = lost?.occurredAt ?? paidAt;
       lines.forEach(line => post(line, date, null, 0));
     }
-    if (madridDate(paidAt) >= from && madridDate(paidAt) <= to) recentOrders.push({ id: order.id, paidAt, totalCents: total, status: order.status, refundedCents: refundUnknown ? null : previousRefund });
+    for(const operation of order.afterSales??[]) {
+      if(madridDate(operation.occurredAt)>to)continue;
+      for(const delta of operation.lines){const item=lines.find(i=>i.id===Number(delta.lineId?.split(':')[0]));if(item)post(item,operation.occurredAt,delta.revenueCents,delta.costCents,0,delta.unitsReturned);}
+    }
+    const manuallyReturned=(order.afterSales??[]).filter(op=>madridDate(op.occurredAt)<=to).reduce((n,op)=>n+op.refundCents,0);
+    if (madridDate(paidAt) >= from && madridDate(paidAt) <= to) recentOrders.push({ id: order.id, paidAt, totalCents: total, status: order.status, refundedCents: refundUnknown ? null : previousRefund+manuallyReturned });
   }
   const allProducts = [...products.values()];
   return { totals, buckets: [...buckets].map(([date, amounts]) => ({ date, ...amounts })), products: allProducts,

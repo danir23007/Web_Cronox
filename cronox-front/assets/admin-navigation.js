@@ -6,7 +6,7 @@
   const render = () => {
     document.querySelectorAll('[data-admin-navigation]').forEach(nav => {
       if (nav.dataset.adminNavigationReady) return;
-      nav.innerHTML = markup; nav.dataset.adminNavigationReady = 'true';
+      nav.innerHTML = markup + `<button class="sidebar-group" aria-expanded="false" aria-controls="navPhysical">COBRO FÍSICO<span class="sidebar-chevron">⌄</span></button><div id="navPhysical" class="sidebar-children" hidden><button data-nav-target="section-labels">Etiquetas</button><button data-nav-target="section-register">CAJA</button></div>`; nav.dataset.adminNavigationReady = 'true';
       nav.querySelectorAll('[data-nav-target]').forEach(button => { button.hidden = true; });
     });
     if (!document.getElementById('adminShell')) {

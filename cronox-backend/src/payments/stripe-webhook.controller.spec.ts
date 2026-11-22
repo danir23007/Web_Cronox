@@ -27,6 +27,12 @@ describe('StripeWebhookController lifecycle safety', () => {
       authService,
     );
   });
+  it('rejects an external contactless payment without a server checkout and creates no second sale', async () => {
+    await expect((controller as any).handleVerifiedPaymentIntentSucceeded({
+      id:'pi_external_contactless_test',status:'succeeded',amount_received:12000,currency:'eur',metadata:{},
+    },new Date())).rejects.toThrow('STRIPE_CHECKOUT_SNAPSHOT_REQUIRED');
+    expect(ordersService.createOrderFromVerifiedStripePayment).not.toHaveBeenCalled();
+  });
   it.each(['NEW_ACCOUNT', 'EXISTING_PASSWORDLESS', 'NOT_NEEDED', null])('recovers initial setup from persisted scenario %s only', async accountScenario => {
     const prisma = { order: { findUnique: jest.fn().mockResolvedValue({ id: 18, userId: 42, status: 'PAID' }) } };
     const hook = new StripeWebhookController({} as any, ordersService, {} as any, prisma as any, {} as any, authService);

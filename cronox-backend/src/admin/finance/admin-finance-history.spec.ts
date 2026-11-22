@@ -12,6 +12,8 @@ describe('Archived finance reports', () => {
     } }));
     const findMany = jest.fn(({where,select}) => select ? [{currency:'EUR'}] : archives.filter(row => row.orderId > where.orderId.gt).slice(0,200));
     const tx = {
+      registerSale:{findMany:jest.fn().mockResolvedValue([])},
+      afterSaleOperation:{findMany:jest.fn().mockResolvedValue([])},
       pointSale:{findMany:jest.fn().mockResolvedValue([])},
       pointEntry:{findMany:jest.fn().mockResolvedValue([])}, salePoint:{findMany:jest.fn().mockResolvedValue([])},
       financeArchive:{findMany}, financeEventArchive:{findMany:jest.fn().mockResolvedValue([])},

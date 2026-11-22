@@ -48,7 +48,7 @@ describe('Member composition: existing purchase-statistics contract', () => {
         status: { in: [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.SHIPPED,
           OrderStatus.DELIVERED, OrderStatus.DISPUTED, OrderStatus.REFUNDED] },
       },
-      select: { status: true, items: { select: { productId: true, quantity: true } } },
+      select: { status: true, items: { select: { productId: true, quantity: true, afterSaleUnits: { where: { state: 'RETURNED' }, select: { id: true } } } } },
     });
   });
 

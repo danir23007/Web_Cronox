@@ -1,5 +1,10 @@
+import { AfterSalesController, AfterSalesService } from './register/after-sales.controller';
+import { RegisterConfirmationController, RegisterConfirmationService } from './register/register-confirmation.controller';
 import { ProductEditionsService } from './lots/product-editions.service';
 import { Module } from '@nestjs/common';
+import { RegisterController } from './register/register.controller';
+import { AdminLabelsController } from './labels/admin-labels.controller';
+import { AdminLabelsService } from './labels/admin-labels.service';
 import { AdminLotsController } from './lots/admin-lots.controller';
 import { AdminLotsService } from './lots/admin-lots.service';
 import { AdminPointsController } from './points/admin-points.controller';
@@ -63,6 +68,10 @@ import { ShippingTrackingModule } from '../shipping-tracking/shipping-tracking.m
     ShippingTrackingModule,
   ],
   controllers: [
+    AdminLabelsController,
+    RegisterController,
+    AfterSalesController,
+    RegisterConfirmationController,
     AdminLotsController,
     AdminPointsController,
     AdminFavoritesController,
@@ -86,6 +95,9 @@ import { ShippingTrackingModule } from '../shipping-tracking/shipping-tracking.m
     AdminManualPurchaseCorrectionsController,
   ],
   providers: [
+    AdminLabelsService,
+    RegisterConfirmationService,
+    AfterSalesService,
     AdminLotsService,
     ProductEditionsService,
     AdminPointsService,

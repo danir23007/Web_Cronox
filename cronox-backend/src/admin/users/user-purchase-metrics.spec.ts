@@ -12,6 +12,7 @@ const sale = (id: number, overrides: Partial<FinanceOrder> = {}): FinanceOrder =
 });
 function fixture(orders: FinanceOrder[], owners = orders.map(order => ({ id: order.id, userId: order.id })), events: any[] = [], stocks: any[] = []) {
   return {
+    afterSaleOperation: {findMany:jest.fn().mockResolvedValue([])},
     order: { findMany: jest.fn().mockResolvedValue(owners) },
     financeArchive: { findMany: jest.fn(({ where }) => orders.filter(o => where.orderId.in.includes(o.id)).map(order => ({ orderId: order.id, providerRef: order.providerRef, snapshot: order }))) },
     financeEventArchive: { findMany: jest.fn().mockResolvedValue(events) },

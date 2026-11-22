@@ -48,6 +48,8 @@ export type MeAddress = {
 };
 
 export type MeOrder = {
+  purchaseUnits?:{bought:number;returned:number;held:number};
+  afterSales?: {kind:string;occurredAt:Date;refundCents:number;units:{name:string;fromSize:string|null;toSize:string|null;valueCents:number}[]}[];
   excludedFromStatistics: boolean;
   id: number;
   createdAt: Date;
@@ -233,6 +235,8 @@ export class MeService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       select: {
+        afterSales:{select:{kind:true,occurredAt:true,refundCents:true,receipt:true},orderBy:{occurredAt:'asc'}},
+        items:{select:{quantity:true,afterSaleUnits:{where:{state:'RETURNED'},select:{id:true}}}},
         id: true,
         createdAt: true,
         status: true,
@@ -254,6 +258,8 @@ export class MeService {
     });
 
     return orders.map((order) => ({
+      purchaseUnits:order.afterSales?.length?{bought:order.items.reduce((n,i)=>n+i.quantity,0),returned:order.items.reduce((n,i)=>n+i.afterSaleUnits.length,0),held:order.items.reduce((n,i)=>n+i.quantity-i.afterSaleUnits.length,0)}:undefined,
+      afterSales:(order.afterSales??[]).map(op=>({kind:op.kind,occurredAt:op.occurredAt,refundCents:op.refundCents,units:((op.receipt as any)?.units??[]).map((u:any)=>({name:u.name,fromSize:u.fromSize??u.originalSize??null,toSize:u.toSize??null,valueCents:u.valueCents}))})),
       id: order.id,
       createdAt: order.createdAt,
       status: order.status,

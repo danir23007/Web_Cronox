@@ -5,7 +5,7 @@ import type { PointDelta } from './point-calculations';
 export function pointPartialCost(line: PointDelta) {
   if (line.costCents !== null) return { knownCostCents:line.costCents,knownProfitCents:line.revenueCents-line.costCents-line.commissionCents,pending:[] as {key:string;units:number}[] };
   const parts=line.lotCosts ?? [];
-  const sign=line.unitsReturned>0 || line.unitsSold<0 ? -1 : 1;
+  const sign=line.costSign ?? (line.unitsReturned>0 || line.unitsSold<0 ? -1 : 1);
   const result={knownCostCents:0,knownProfitCents:0,pending:[] as {key:string;units:number}[]};
   if(!parts.length) { result.pending.push({key:line.lineId ?? 'variant:'+line.variantId,units:sign*(Math.abs(line.unitsSold)||line.unitsReturned||1)});return result; }
   const revenues=allocate(Math.abs(line.revenueCents),parts.map(p=>p.quantity)).map(n=>Math.sign(line.revenueCents)*n);

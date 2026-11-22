@@ -699,6 +699,8 @@ model ProductCategory {
 }
 
 model ProductVariant {
+  physicalLotBarcodes PhysicalLotBarcode[]
+  physicalBarcode           PhysicalBarcode?
   lotSlices                 InventoryLotSlice[]
   restockRequests           RestockRequest[]
   id                        Int                        @id @default(autoincrement())
@@ -719,6 +721,24 @@ model ProductVariant {
 
   @@unique([productId, size])
   @@index([productId])
+}
+
+/// Internal Code 128 identity. A deleted variant leaves its identifier retired.
+model PhysicalBarcode {
+  code      String          @id @db.VarChar(13)
+  variantId Int?            @unique
+  createdAt DateTime        @default(now())
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+}
+
+model PhysicalLotBarcode {
+  code String @id @db.VarChar(13)
+  variantId Int
+  lotId String
+  variant ProductVariant @relation(fields:[variantId], references:[id], onDelete:Restrict)
+  lot InventoryLot @relation(fields:[lotId], references:[id], onDelete:Restrict)
+  createdAt DateTime @default(now())
+  @@unique([variantId,lotId])
 }
 
 model ProductImage {
@@ -776,6 +796,16 @@ model GallerySettings {
   updatedBy  Int?
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
+}
+
+/// Shared physical-label design; independent from catalogue and barcode identity.
+model LabelTemplateSettings {
+  id         String   @id @default("global")
+  definition Json
+  revision   Int      @default(0)
+  updatedBy  Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model FooterSettings {
@@ -1584,6 +1614,8 @@ model CheckoutEffect {
 }
 
 model Order {
+  afterSales AfterSaleOperation[]
+  registerSale RegisterSale?
   pointSale PointSale?
   welcomeOriginBenefit AccountWelcomeBenefit? @relation("WelcomeOriginOrder")
   welcomeFirstOnlineBenefit AccountWelcomeBenefit? @relation("WelcomeFirstOnlineOrder")
@@ -1670,6 +1702,21 @@ model Order {
   @@index([source, createdAt])
   @@index([recordedById, createdAt])
   @@index([trackingNextSyncAt, trackingLeaseUntil])
+}
+
+model RegisterSale {
+  key String @id @db.VarChar(100)
+  requestHash String @db.VarChar(64)
+  orderId Int @unique
+  order Order @relation(fields:[orderId],references:[id],onDelete:Restrict)
+  paymentMethod String
+  paymentChannel String
+  confirmationMode String @default("MANUAL_RECEIVED")
+  confirmedById Int
+  confirmedAt DateTime @default(now())
+  pointId String?
+  receipt Json
+  @@index([confirmedAt,pointId])
 }
 
 // Carrier events never drive payment, refund or Order.status transitions.
@@ -1759,6 +1806,7 @@ model CorreosTrackingGate {
 }
 
 model OrderItem {
+  afterSaleUnits AfterSaleUnit[]
   financialSnapshot OrderItemFinancial?
   id        Int             @id @default(autoincrement())
   orderId   Int
@@ -1774,6 +1822,43 @@ model OrderItem {
 
   @@index([orderId])
   @@index([variantId])
+}
+
+model AfterSaleOperation {
+  key String @id @db.VarChar(80)
+  requestHash String @db.VarChar(64)
+  kind String
+  orderId Int
+  order Order @relation(fields:[orderId],references:[id],onDelete:Restrict)
+  userId Int
+  actorId Int
+  occurredAt DateTime @default(now())
+  pointId String?
+  refundCents Int @default(0)
+  taxCents Int @default(0)
+  paymentMethod String?
+  externalReference String? @unique
+  restock Boolean
+  reason String
+  lines Json
+  receipt Json
+  @@index([orderId,occurredAt])
+  @@index([userId,occurredAt])
+}
+
+model AfterSaleUnit {
+  id String @id
+  itemId Int
+  item OrderItem @relation(fields:[itemId],references:[id],onDelete:Restrict)
+  ordinal Int
+  variantId Int
+  lotId String
+  valueCents Int
+  costParts Json
+  sourceKey String
+  state String @default("HELD")
+  version Int @default(0)
+  @@unique([itemId,ordinal])
 }
 
 // Private relations are never included by public product/cart/order queries.
@@ -2330,6 +2415,7 @@ model EmailChangeRequest {
 
 // Lot balances are protected by deferred database constraints in the migration.
 model InventoryLot {
+  physicalBarcodes PhysicalLotBarcode[]
   webOfferPriceCents Int?
   webOfferPreviousCents Int?
   webOfferStartsAt DateTime? @db.Timestamptz(3)

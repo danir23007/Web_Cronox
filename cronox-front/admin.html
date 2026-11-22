@@ -1202,6 +1202,22 @@
       <div class="waitlist-pages"><button id="waitlistPrev" class="btn" type="button" disabled>Anterior</button><span id="waitlistPage"></span><button id="waitlistNext" class="btn" type="button" disabled>Siguiente</button></div>
     </section>
 
+    <section id="section-register" class="admin-section" aria-labelledby="register-title" hidden>
+      <header class="register-head"><div><small>COBRO FÍSICO</small><h2 id="register-title">Caja</h2></div><div><button type="button" data-act="ticket" hidden>Ver ticket</button> <button type="button" data-act="reset" hidden>Cancelar compra</button></div></header>
+      <dialog class="register-cancel" data-cancel-dialog aria-labelledby="register-cancel-title" aria-describedby="register-cancel-description">
+        <button type="button" class="register-cancel-close" data-cancel-keep aria-label="Cerrar">×</button>
+        <h3 id="register-cancel-title">¿Cancelar compra?</h3>
+        <p id="register-cancel-description">Se descartará la preparación actual. Las operaciones ya registradas se conservarán.</p>
+        <div class="register-cancel-actions"><button type="button" data-cancel-keep autofocus>Seguir</button><button type="button" data-cancel-confirm>Sí, cancelar</button></div>
+      </dialog>
+      <div id="register-feedback" role="status" aria-live="polite"></div>
+      <div class="register-layout"><div id="register-work"></div><aside id="register-ticket" aria-label="Ticket de compra" tabindex="-1"></aside></div>
+    </section>
+    <section id="section-labels" class="card admin-section" aria-labelledby="title-labels" hidden>
+      <h2 id="title-labels">Etiquetas</h2>
+      <p>COBRO FÍSICO · Códigos internos por producto, talla y lote. Los códigos anteriores se conservan. Sin precio impreso.</p>
+      <div id="physicalLabels"></div>
+    </section>
     <section id="section-inventory" class="card admin-section inventory-section" aria-labelledby="title-inventory" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
       <div class="inventory-heading">
@@ -2192,9 +2208,13 @@
   <script src="assets/category-controls.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
   <script src="assets/account-state.js?v=1"></script>
-  <script src="assets/admin-navigation.js?v=2"></script>
+  <link rel="stylesheet" href="assets/admin-register.css?v=4">
+  <script src="assets/admin-register-camera.js"></script>
+  <script src="assets/admin-after-sales.js?v=2"></script>
+  <script src="assets/admin-register.js?v=6"></script>
+  <script src="assets/admin-navigation.js?v=4"></script>
   <script src="assets/admin-shell.js?v=11"></script>
-  <script src="assets/admin-finance.js?v=5"></script>
+  <script src="assets/admin-finance.js?v=register-5"></script>
   <script src="assets/admin-points.js?v=11"></script>
   <script src="assets/admin-map.js?v=6"></script>
   <link rel="stylesheet" href="assets/admin-visitors.css?v=1">
@@ -2206,8 +2226,9 @@
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=14"></script>
   <script src="assets/admin-lots.js?v=2"></script>
+  <script src="assets/admin-labels.js?v=9"></script>
   <script src="assets/admin-editions.js?v=3"></script>
-  <script src="assets/admin.js?v=27"></script>
+  <script src="assets/admin.js?v=29"></script>
   <script src="assets/admin-qr-events.js?v=3"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=3"></script>

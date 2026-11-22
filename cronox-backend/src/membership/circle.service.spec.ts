@@ -17,6 +17,7 @@ const sale = (id: number, total: string, overrides: Partial<FinanceOrder> = {}):
 function fixture(orders: FinanceOrder[], events: any[] = []) {
   const user = { id: 7, circleLevel: 1, circle2PromotedAt: null as Date | null };
   const tx: any = {
+    afterSaleOperation: { findMany: jest.fn().mockResolvedValue([]) },
     user: { findUnique: jest.fn(async () => ({ ...user })), updateMany: jest.fn(async ({ data }) => { Object.assign(user, data); return { count: 1 }; }) },
     order: { findMany: jest.fn(async () => orders.map(order => ({ id: order.id, userId: 7 }))) },
     financeArchive: { findMany: jest.fn(async () => orders.map(order => ({ orderId: order.id, providerRef: order.providerRef, snapshot: order }))) },

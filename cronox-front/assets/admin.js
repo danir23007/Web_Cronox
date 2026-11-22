@@ -303,6 +303,7 @@
   const PENDING_STORAGE_KEY = 'cronox.admin.pendingCounts';
   const ADMIN_ROLES = new Set(['ADMIN', 'SUPERADMIN']);
   const PERMISSIONS = {
+    labels: ['ADMIN', 'SUPERADMIN'],
     finance: ['ADMIN', 'SUPERADMIN'],
     requests: ['ADMIN', 'SUPERADMIN'],
     users: ['ADMIN', 'SUPERADMIN'],
@@ -321,6 +322,8 @@
     notes: ['ADMIN', 'SUPERADMIN'],
   };
   const SECTION_PERMISSIONS = {
+    'section-labels': 'labels',
+    'section-register': 'labels',
     'section-sale-points': 'finance',
     'section-map': 'finance',
     'section-push': 'mails',
@@ -984,6 +987,7 @@
     if (window.CRONOX_ADMIN_SHELL && !window.CRONOX_ADMIN_SHELL.canLeave(destination)) return false;
     const allowed = applySectionAccess(sectionId);
     window.CRONOX_BULK?.leave(sectionId);
+    if (currentSectionId === 'section-register' && sectionId !== currentSectionId) window.CRONOX_REGISTER?.leave();
     if (sectionId !== 'section-qr-events') window.CRONOX_QR_EVENTS?.leave();
     document.querySelectorAll('.admin-section').forEach((section) => {
       section.hidden = section.id !== sectionId;
@@ -1656,6 +1660,8 @@
   };
 
   const loadSection = (sectionId) => {
+    if (sectionId === 'section-register' && canAccess('labels')) window.CRONOX_REGISTER?.open();
+    if (sectionId === 'section-labels' && canAccess('labels')) window.CRONOX_LABELS?.load();
     if (sectionId !== 'section-products') productOpenVersion++;
     if (sectionId === 'section-dashboard') { fetchDashboard(); window.CRONOX_FINANCE?.load('dashboard'); window.CRONOX_VISITORS?.load(); }
     if (sectionId === 'section-money') window.CRONOX_FINANCE?.load('money');

@@ -1,0 +1,312 @@
+#section-register {
+  --ink: #f5f2eb;
+  --muted: #b7b7ad;
+  --line: #44463f;
+  --accent: #d9ed9a;
+  color: var(--ink);
+  background: #191b19;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: clamp(16px, 3vw, 40px);
+  max-width: 1280px;
+  margin-inline: auto;
+  color-scheme: dark;
+}
+#section-register * {
+  box-sizing: border-box;
+}
+#section-register [hidden] {
+  display: none !important;
+}
+#section-register .register-head,
+#register-ticket footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+#section-register h2 {
+  font-size: clamp(32px, 5vw, 55px);
+  letter-spacing: -0.045em;
+  margin: 0;
+  color: var(--ink);
+}
+#section-register h3 {
+  font-size: 1.5rem;
+  margin: 0.8em 0;
+  color: var(--ink);
+}
+#section-register small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+#section-register .register-head small {
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+#register-feedback {
+  min-height: 2.5em;
+  padding-block: 0.55em;
+  color: var(--accent);
+}
+#register-feedback.register-error {
+  color: #ffbeab;
+}
+#section-register .register-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(275px, 1fr);
+  gap: clamp(16px, 3vw, 34px);
+}
+#section-register .register-layout:has(#register-ticket[hidden]) {
+  grid-template-columns: minmax(0, 740px);
+}
+#section-register button,
+#section-register select,
+#section-register input {
+  color: var(--ink);
+  background: #2a2d28;
+  border: 1px solid #56594f;
+  border-radius: 8px;
+  padding: 9px 12px;
+  min-height: 42px;
+  font: inherit;
+  max-width: 100%;
+}
+#section-register button {
+  cursor: pointer;
+}
+#section-register button:hover:not(:disabled),
+#section-register button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#section-register button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+#section-register :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* Step headings receive programmatic focus for assistive technology, not an input outline. */
+#register-work h3[tabindex="-1"]:focus {
+  outline: none;
+}
+#section-register .register-cancel {
+  color: var(--ink);
+  background: #252822;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+}
+#section-register .register-cancel::backdrop { background: rgb(0 0 0 / 70%); }
+#section-register .register-cancel h3 { margin-top: 12px; padding-right: 32px; }
+#section-register .register-cancel p { color: var(--muted); line-height: 1.5; }
+#section-register .register-cancel-close { position: absolute; top: 10px; right: 10px; }
+#section-register .register-cancel-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 10px; margin-top: 24px; }
+#section-register [data-cancel-confirm] { background: var(--accent); color: #191b19; }
+#section-register .register-tile {
+  display: block;
+  text-align: left;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 16px 20px;
+}
+#section-register .register-tile strong {
+  font-size: 1.05rem;
+}
+#section-register .register-tile small {
+  margin-top: 5px;
+}
+#section-register .register-tabs,
+#section-register form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+#section-register label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  min-width: 0;
+}
+#section-register form label:first-child {
+  flex: 1 1 150px;
+}
+#section-register input[type="number"] {
+  width: 70px;
+}
+#section-register details {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 0;
+}
+#section-register summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 48px;
+  cursor: pointer;
+}
+#section-register summary::after {
+  content: "⌄";
+  margin-left: auto;
+}
+#section-register img {
+  width: 48px;
+  height: 56px;
+  object-fit: cover;
+  background: #373934;
+  border-radius: 5px;
+}
+#section-register video {
+  max-width: 100%;
+  max-height: 260px;
+  display: block;
+  margin: 10px auto;
+}
+#register-ticket {
+  background: #252822;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  height: fit-content;
+  min-width: 0;
+  position: sticky;
+  top: 14px;
+  overflow-wrap: anywhere;
+}
+#register-ticket h3 {
+  margin: 0;
+}
+#register-ticket p {
+  color: var(--muted);
+}
+#section-register .register-line {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+#section-register .register-line > b {
+  margin-left: auto;
+  white-space: nowrap;
+}
+#section-register .register-counter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+#section-register .register-counter button {
+  padding: 4px 8px;
+  min-height: 34px;
+}
+#register-ticket footer {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+#register-ticket footer strong {
+  font-size: 1.55rem;
+  color: var(--accent);
+}
+#section-register [data-choice]:not(:empty) {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+@media (max-width: 850px) {
+  #section-register .register-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #register-ticket {
+    position: static;
+  }
+  #section-register [data-products] {
+    max-height: 48vh;
+    overflow: auto;
+  }
+}
+#section-register .register-symbol {
+  float: left;
+  margin-right: 16px;
+  width: 36px;
+  height: 36px;
+  padding: 5px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--accent);
+}
+#section-register [data-act="ticket"] {
+  display: none;
+}
+@media (max-width: 850px) {
+  #section-register [data-act="ticket"]:not([hidden]) {
+    display: inline-block;
+  }
+  #section-register .register-head {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  #register-work > h3 {
+    animation: register-step-in 0.16s ease-out;
+  }
+  @keyframes register-step-in {
+    from {
+      opacity: 0.4;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+#section-register [data-payments] {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 16px 0;
+  padding: 12px;
+}
+#section-register [data-payments] label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  cursor: pointer;
+}
+#section-register [data-payments] input {
+  min-height: 22px;
+  width: 22px;
+  accent-color: var(--accent);
+}
+#section-register [data-act="paid"] {
+  width: 100%;
+  background: var(--accent);
+  color: #191b19;
+  font-weight: bold;
+  min-height: 50px;
+  margin-bottom: 8px;
+}
+#section-register [data-payment-error] {
+  color: #ffbeab;
+}
+#section-register .register-history-card {display:flex;align-items:center;gap:18px;width:100%;text-align:left;margin:10px 0;padding:16px;}
+#section-register .register-after-unit {display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);}
+#section-register .register-after-unit input[type=checkbox],#section-register .register-condition input[type=checkbox] {width:22px;min-height:22px;flex:0 0 22px;accent-color:var(--accent);}
+#section-register .register-condition {padding:14px;border:1px solid var(--line);border-radius:8px;margin:18px 0;}
+#section-register .register-condition label {display:flex;align-items:flex-start;gap:10px;}
+#section-register textarea {background:#2a2d28;color:var(--ink);width:100%;min-height:70px;border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit;}
+#section-register [data-as=confirm] {width:100%;background:var(--accent);color:#191b19;font-weight:bold;margin-top:10px;}
+#section-register [data-as-field] {margin-block:6px;}
+#section-register .register-after-units {max-height:65vh;overflow:auto;}

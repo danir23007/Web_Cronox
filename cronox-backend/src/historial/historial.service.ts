@@ -33,7 +33,7 @@ export class HistorialService {
       where: { ...(analytics ? statisticsOrderWhere : {}), userId, status: { in: this.recordedPurchaseStatuses } },
       select: {
         status: true,
-        items: { select: { productId: true, quantity: true } },
+        items: { select: { productId: true, quantity: true, afterSaleUnits:{where:{state:'RETURNED'},select:{id:true}} } },
       },
     });
 
@@ -45,8 +45,10 @@ export class HistorialService {
       for (const item of order.items) {
         const quantity = Math.max(0, item.quantity);
         if (isRetained) {
-          articulosAdquiridos += quantity;
-          if (quantity > 0) productIds.add(item.productId);
+          const returned=item.afterSaleUnits?.length??0;
+          articulosAdquiridos += Math.max(0,quantity-returned);
+          devoluciones += returned;
+          if (quantity > returned) productIds.add(item.productId);
         } else if (order.status === OrderStatus.REFUNDED) {
           devoluciones += quantity;
         }

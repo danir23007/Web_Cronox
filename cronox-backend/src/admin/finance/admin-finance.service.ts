@@ -1,3 +1,4 @@
+import { attachAfterSales } from '../register/after-sale-finance';
 import { applyOrderHistoricalCosts } from './order-historical-cost';
 import { countsInStatistics } from '../../common/statistics-eligibility';
 import { BadRequestException, Injectable } from '@nestjs/common';
@@ -19,7 +20,7 @@ export class AdminFinanceService {
     if (query.pointId && ['web', 'manual'].includes(query.source)) throw new BadRequestException('Selecciona el origen Puntos de venta para filtrar un punto.');
     // Independent archives survive operational deletes. Keyset batches bound raw
     // memory; only period buckets and product aggregates are retained in memory.
-    const { result, currencies, points, externalTotals, salesCount } = await this.prisma.$transaction(async tx => {
+    const { result, currencies, points, externalTotals, salesCount, registerPayments } = await this.prisma.$transaction(async tx => {
       const result = calculateFinance([], [], query.from, query.to, query.aggregation);
       const products = new Map<number, typeof result.products[number]>();
       const warnings = new Set<string>();
@@ -60,7 +61,8 @@ export class AdminFinanceService {
         }).length;
         const events = eventRows.map(row => ({ ...(row.snapshot as unknown as FinanceEvent), occurredAt: row.occurredAt }));
         const valuedOrders = await Promise.all(orders.map(order => applyOrderHistoricalCosts(tx, order)));
-        const partial = calculateFinance(valuedOrders, events, query.from, query.to, query.aggregation);
+        const afterSales = await attachAfterSales(tx,valuedOrders,events);
+        const partial = calculateFinance(afterSales.orders, afterSales.events, query.from, query.to, query.aggregation);
         merge(result.totals, partial.totals);
         partial.buckets.forEach((bucket, i) => merge(result.buckets[i], bucket));
         for (const product of partial.products) {
@@ -82,7 +84,17 @@ export class AdminFinanceService {
       result.products = [...products.values()]; result.warnings = [...warnings];
       const points = await tx.salePoint.findMany({ select: { id: true, name: true, archived: true }, orderBy: { name: 'asc' } });
       const currencies = await tx.financeArchive.findMany({ distinct: ['currency'], select: { currency: true } });
-      return { result, currencies, points, externalTotals: external.totals, salesCount };
+      const confirmed= query.source==='web' ? [] : await tx.registerSale.findMany({
+        where:{confirmedAt:{gte:madridMidnight(query.from),lt:madridMidnight(nextDate(query.to))},
+          ...(query.pointId?{pointId:query.pointId}:query.source==='points'?{pointId:{not:null}}:query.source==='manual'?{pointId:null}:{}),
+          order:{currency:query.currency,status:{in:['PAID','PROCESSING','SHIPPED','DELIVERED','DISPUTED']},excludedFromStatistics:false}},
+        select:{paymentMethod:true,order:{select:{total:true}}},
+      });
+      const registerPayments=['EXTERNAL_STRIPE','BIZUM','CASH'].map(method=>({
+        method,salesCount:confirmed.filter(s=>s.paymentMethod===method).length,
+        totalCents:confirmed.filter(s=>s.paymentMethod===method).reduce((n,s)=>n+new Prisma.Decimal(s.order.total).mul(100).toNumber(),0),
+      }));
+      return { result, currencies, points, externalTotals: external.totals, salesCount, registerPayments };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 60000 });
     const search = query.search.trim().toLocaleLowerCase('es');
     const filtered = result.products.filter(product => !search || product.name.toLocaleLowerCase('es').includes(search) || String(product.productId) === search);
@@ -90,7 +102,7 @@ export class AdminFinanceService {
     const pageSize = 25;
     const page = Math.min(query.page, Math.max(1, Math.ceil(sorted.length / pageSize)));
     return {
-      ...result, products: sorted.slice((page - 1) * pageSize, page * pageSize),
+      ...result, registerPayments, products: sorted.slice((page - 1) * pageSize, page * pageSize),
       points, source: query.source ?? 'all', pointId: query.pointId ?? null, salesCount, externalTotals,
       topProducts: sortProducts(result.products.filter(product => product.revenueCents !== null && product.revenueCents > 0), 'revenue', 'desc').slice(0, 5),
       pagination: { page, pageSize, total: sorted.length, pages: Math.max(1, Math.ceil(sorted.length / pageSize)) },

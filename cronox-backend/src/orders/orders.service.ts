@@ -1800,6 +1800,7 @@ export class OrdersService {
     paymentIntentId: string,
     targetStatus: StripeLifecycleStatus,
   ): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM "Order" WHERE "providerRef"=${paymentIntentId} FOR UPDATE`;
     const order = await tx.order.findUnique({
       where: { providerRef: paymentIntentId },
       include: { items: true },
@@ -1833,6 +1834,17 @@ export class OrdersService {
       where: { orderId: order.id },
       include: { items: true },
     });
+
+    const afterSales=await tx.afterSaleOperation.findMany({where:{orderId:order.id}});
+    if(afterSales.length && targetStatus===OrderStatus.REFUNDED) {
+      const events=await tx.stripeWebhookEvent.findMany({where:{paymentIntentId,type:'charge.refunded'}});
+      const latest=[...events].sort((a,b)=>b.occurredAt.getTime()-a.occurredAt.getTime())[0];
+      const refunds=(latest?.payload as any)?.data?.object?.refunds;
+      const matched=Array.isArray(refunds?.data) && !refunds.has_more && refunds.data.every((r:any)=>r.status==='succeeded' && afterSales.some(op=>op.externalReference===r.id && op.refundCents===r.amount));
+      const returned=afterSales.filter(op=>op.kind==='RETURN').reduce((n,op)=>n+op.refundCents,0);
+      if(matched && latest?.refundCumulativeCents===returned) return;
+      throw new ConflictException('AFTER_SALE_REFUND_RECONCILIATION_REQUIRED');
+    }
 
     if (targetStatus === OrderStatus.REFUNDED) {
       // A previous direct admin update may already have set REFUNDED while

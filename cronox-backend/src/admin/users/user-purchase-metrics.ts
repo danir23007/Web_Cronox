@@ -1,3 +1,4 @@
+import { attachAfterSales } from '../register/after-sale-finance';
 import { Prisma } from '@prisma/client';
 import { archiveUtcDate } from '../finance/historical-cost';
 import { calculateFinance, FinanceEvent, FinanceOrder, madridDate } from '../finance/financial-calculations';
@@ -35,15 +36,17 @@ export async function loadUserPurchaseMetrics(tx: Prisma.TransactionClient, user
       list.push({ ...(row.snapshot as unknown as FinanceOrder['stockMovements'][number]), createdAt: row.createdAt });
       stockByOrder.set(row.orderId, list);
     }
+    const attached=await attachAfterSales(tx,archives.map(a=>a.snapshot as unknown as FinanceOrder),[...eventsByPayment.values()].flat());
+    const afterByOrder=new Map(attached.orders.map(o=>[o.id,o]));
     for (const archive of archives) {
-      const order = { ...(archive.snapshot as unknown as FinanceOrder) };
+      const order = { ...afterByOrder.get(archive.orderId)! };
       if (['PENDING', 'CANCELLED'].includes(order.status)) continue;
       // General-statistics exclusion never changes the customer's own spending.
       // Override only this local copy; the financial archive remains unchanged.
       order.excludedFromStatistics = false;
       for (const field of ['paidAt', 'purchasedAt', 'createdAt', 'voidedAt'] as const) if (order[field]) order[field] = archiveUtcDate(order[field]!);
       order.stockMovements = stockByOrder.get(order.id) ?? [];
-      const report = calculateFinance([order], eventsByPayment.get(order.providerRef ?? '') ?? [], '2000-01-01', to, 'months', false);
+      const report = calculateFinance([order], attached.events.filter(e=>e.paymentIntentId===order.providerRef), '2000-01-01', to, 'months', false);
       const userId = userByOrder.get(order.id)!;
       const metric = metrics.get(userId)!;
       const paid = report.recentOrders[0];

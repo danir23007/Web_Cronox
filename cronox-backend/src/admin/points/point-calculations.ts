@@ -24,6 +24,7 @@ export type PointLine = {
   returned: number;
 };
 export type PointDelta = {
+  costSign?: number;
   lineId?: string;
   lotCosts?: FrozenLotCost[];
   productId: number;

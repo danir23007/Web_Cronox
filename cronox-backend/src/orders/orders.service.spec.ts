@@ -152,6 +152,7 @@ describe('OrdersService checkout reservations', () => {
 
   beforeEach(() => {
     prisma = {
+      afterSaleOperation: {findMany:jest.fn().mockResolvedValue([])},
       $executeRaw: jest.fn(),
       accountWelcomeBenefit: { findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null) },
       product: { findMany: jest.fn().mockResolvedValue([{ id: 7, name: 'Camiseta', imageUrl: null, privateCost: { unitCostCents: 1000 } }]) },
