@@ -1,9 +1,12 @@
 (() => {
   let session = 0,
     stream,
-    readerScript;
+    readerScript, frameTimer, activeVideo;
   function stop() {
     session++;
+    clearTimeout(frameTimer);
+    if (activeVideo) { activeVideo.pause(); activeVideo.srcObject = null; }
+    activeVideo = null;
     stream?.getTracks().forEach((track) => track.stop());
     stream = null;
   }
@@ -13,7 +16,20 @@
         (await window.BarcodeDetector?.getSupportedFormats())?.includes(format)
       ) {
         const native = new BarcodeDetector({ formats: [format] });
-        return async (video) => (await native.detect(video))[0]?.rawValue;
+        return async (video) => {
+          const result = (await native.detect(video))[0];
+          if (!result) return;
+          const points = result.cornerPoints;
+          const box = result.boundingBox;
+          const center = points?.length ? {
+            x: points.reduce((n, p) => n + p.x, 0) / points.length / video.videoWidth,
+            y: points.reduce((n, p) => n + p.y, 0) / points.length / video.videoHeight,
+          } : box ? {
+            x: (box.x + box.width / 2) / video.videoWidth,
+            y: (box.y + box.height / 2) / video.videoHeight,
+          } : undefined;
+          return { value: result.rawValue, center };
+        };
       }
     } catch {
       /* Fall through to the packaged decoder. */
@@ -21,7 +37,7 @@
     if (!window.CRONOX_QR_READER && !readerScript) {
       readerScript = new Promise((resolve, reject) => {
         const script = document.createElement("script");
-        script.src = "/assets/qr-reader.js?v=2";
+        script.src = "/assets/qr-reader.js?v=3";
         script.onload = resolve;
         script.onerror = () => {
           readerScript = null;
@@ -42,7 +58,14 @@
       canvas
         .getContext("2d", { willReadFrequently: true })
         .drawImage(video, 0, 0, canvas.width, canvas.height);
-      return reader.decodeFromCanvas(canvas);
+      if (!reader.decodeResultFromCanvas) return { value: await reader.decodeFromCanvas(canvas) };
+      const result = await reader.decodeResultFromCanvas(canvas);
+      if (!result) return;
+      const points = Object.values(result.position || {});
+      return { value: result.text, center: points.length ? {
+        x: points.reduce((n, p) => n + p.x, 0) / points.length / canvas.width,
+        y: points.reduce((n, p) => n + p.y, 0) / points.length / canvas.height,
+      } : undefined };
     };
   }
   async function start({ video, devices, format, deviceId, onRead, onError }) {
@@ -64,6 +87,7 @@
         return;
       }
       stream = media;
+      activeVideo = video;
       video.srcObject = media;
       await video.play();
       const cameras = (await navigator.mediaDevices.enumerateDevices()).filter(
@@ -77,21 +101,27 @@
       );
       devices.value = media.getVideoTracks()[0].getSettings().deviceId || "";
       const read = await decoder(format);
-      let last,
-        absent = 0;
+      // Track each visible code independently; alternating codes must not bypass suppression.
+      const visible = new Map();
       async function frame() {
         if (active !== session) return;
         try {
-          const value = await read(video);
+          const detection = await read(video);
+          const value = detection?.value;
           if (active !== session) return;
-          if (value) {
-            absent = 0;
-            if (last !== value) {
-              last = value;
-              await onRead(value);
-            }
-          } else if (++absent >= 5) last = null;
-          if (active === session) setTimeout(frame, 150);
+          for (const [code, absent] of visible) {
+            if (code === value) visible.set(code, 0);
+            else if (absent >= 4) visible.delete(code);
+            else visible.set(code, absent + 1);
+          }
+          if (value && !visible.has(value)) {
+            visible.set(value, 0);
+            // The ticket serializes mutations; keep decoding while network work is pending.
+            Promise.resolve(onRead(value, detection)).catch((err) => {
+              if (active === session) onError(err.message);
+            });
+          }
+          if (active === session) frameTimer = setTimeout(frame, 150);
         } catch (err) {
           if (active === session) {
             stop();

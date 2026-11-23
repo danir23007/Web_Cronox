@@ -120,7 +120,28 @@
     more = false,
     searchVersion = 0,
     audio;
+  let cameraSession = null, choiceScan = null;
+  const resultIcon = (success) => `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="${success ? 'm7 12 3 3 7-7' : 'm8 8 8 8 M16 8l-8 8'}"/></svg>`;
+  function scanResult(scan, success, message) {
+    if (cameraSession !== scan.session) return;
+    notice();
+    feedback.classList.add(success ? "register-success" : "register-error");
+    feedback.innerHTML = resultIcon(success) + `<span>${esc(message)}</span>`;
+    const layer = work.querySelector("[data-camera-indicators]");
+    if (!layer) return;
+    const marker = document.createElement("span");
+    marker.className = "register-camera-result " + (success ? "register-success" : "register-error");
+    marker.innerHTML = resultIcon(success);
+    marker.setAttribute("aria-hidden", "true");
+    const point = scan.detection?.center;
+    marker.style.left = `clamp(40px, ${Number.isFinite(point?.x) ? point.x * 100 : 50}%, calc(100% - 40px))`;
+    marker.style.top = `clamp(40px, ${Number.isFinite(point?.y) ? point.y * 100 : 50}%, calc(100% - 40px))`;
+    layer.append(marker);
+    const timer = setTimeout(() => { marker.remove(); scan.session.timers.delete(timer); }, 1500);
+    scan.session.timers.add(timer);
+  }
   function notice(message = "", error = false) {
+    feedback.classList.remove("register-success");
     feedback.textContent = message;
     feedback.classList.toggle("register-error", error);
     const local = work.querySelector("[data-identification-status]");
@@ -172,7 +193,7 @@
     pending = Promise.resolve();
     choices = [];
     identifying = false;
-    window.CRONOX_REGISTER_CAMERA.stop();
+    closeCamera();
   }
   function run(task, loading) {
     const version = epoch;
@@ -185,7 +206,7 @@
         syncPaid();
         return;
       }
-      notice(loading);
+      if (loading !== undefined) notice(loading);
       try {
         await task(current);
       } catch (e) {
@@ -376,7 +397,7 @@
   const scanForm = (
     credential,
   ) => `<form data-form="code"><label>${credential ? "Acreditación o correo electrónico" : "Código de la prenda"}<input name="code" ${credential ? 'placeholder="Escanea la acreditación o escribe el email" aria-describedby="register-identification-status"' : ""} maxlength="${credential ? 512 : 13}" required autocomplete="off" spellcheck="false"></label><button>${credential ? "Identificar" : "Añadir"}</button></form>
-    ${button("camera", "Abrir cámara")}<div data-camera hidden><video muted playsinline></video><label>Cámara<select data-devices></select></label>${button("close-camera", "Cerrar lector")}</div><div data-choice></div>${credential ? '<p id="register-identification-status" data-identification-status role="status" aria-live="polite"></p>' : ""}`;
+    ${button("camera", "Abrir cámara")}<div data-camera hidden><div class="register-camera-view"><video muted playsinline></video><div data-camera-indicators></div></div><label>Cámara<select data-devices></select></label>${button("close-camera", "Cerrar lector")}</div><div data-choice></div>${credential ? '<p id="register-identification-status" data-identification-status role="status" aria-live="polite"></p>' : ""}`;
   function render() {
     const titles = {
       entry: "Operación",
@@ -627,71 +648,121 @@
     oscillator.start();
     oscillator.stop(audio.currentTime + 0.065);
   }
-  function read(value) {
+  // ProductVariant.id is the persistent size identity; lotId is deliberately excluded.
+  // run() serializes ticket mutations, including reads of different codes for this key.
+  const garmentKey = (option) => JSON.stringify([option.productId, option.variantId]);
+  function acceptScan(scan, option) {
+    scan.session.accepted.add(garmentKey(option));
+    scanResult(scan, true, "Prenda aceptada");
+    beep();
+  }
+  function cameraRead(value, detection, session) {
+    if (session !== cameraSession || session.codes.has(value) || choices.length) return;
+    session.codes.add(value);
+    const scan = { session, detection };
+    return read(value, scan).finally(() => session.codes.delete(value));
+  }
+  function read(value, scan) {
     if (step === "credential" && identifying) return;
     const credential = step === "credential";
     const version = epoch;
     if (credential) identifying = true;
     return run(
-      async (current) => {
-        const target = work.querySelector("[data-choice]");
-        if (step === "credential") {
-          const found = await api("customer", { content: value });
-          if (!current()) return;
-          if (operation !== "PURCHASE") {
+      async (valid) => {
+        const current = () => valid() && (!scan || scan.session === cameraSession);
+        if (!current()) return;
+        try {
+          const target = work.querySelector("[data-choice]");
+          if (step === "credential") {
+            const found = await api("customer", { content: value });
+            if (!current()) return;
+            if (operation !== "PURCHASE") {
+              closeCamera();
+              invalidate();
+              step = "after-sales";
+              window.CRONOX_AFTER_SALES.open({
+                customer: found,
+                kind: operation,
+                api,
+                work,
+                receipt,
+                notice,
+              });
+              return;
+            }
+            const next = await quote(itemInputs(), ticket.point?.id, found.id);
+            if (!current()) return;
+            const changes = changedPrices(next);
+            ticket = next;
+            identified = true;
             closeCamera();
-            invalidate();
-            step = "after-sales";
-            window.CRONOX_AFTER_SALES.open({
-              customer: found,
-              kind: operation,
-              api,
-              work,
-              receipt,
-              notice,
-            });
+            go("items");
+            if (changes) notice("Precios actualizados: " + changes);
             return;
           }
-          const next = await quote(itemInputs(), ticket.point?.id, found.id);
+          if (choices.length)
+            throw Error("Elige o cancela primero la tirada pendiente.");
+          if (!/^CR[XL][0-9]{10}$/.test(value))
+            throw Error("Código de prenda no válido.");
+          const opts = scan?.session.resolved.get(value) || await api("barcode", { code: value });
           if (!current()) return;
-          const changes = changedPrices(next);
-          ticket = next;
-          identified = true;
-          closeCamera();
-          go("items");
-          if (changes) notice("Precios actualizados: " + changes);
-          return;
+          if (scan) {
+            scan.session.resolved.set(value, opts);
+            if (scan.session.accepted.has(garmentKey(opts[0]))) {
+              if (feedback.textContent !== "Prenda ya escaneada en esta sesión")
+                notice("Prenda ya escaneada en esta sesión");
+              return;
+            }
+          }
+          if (opts.length === 1) {
+            if (await add(opts[0], 1, current)) {
+              if (scan) acceptScan(scan, opts[0]);
+              else beep();
+            }
+            return;
+          }
+          if (!scan) closeCamera();
+          choiceScan = scan;
+          choices = opts;
+          target.innerHTML =
+            opts
+              .map((o, i) =>
+                button(
+                  "lot",
+                  `${esc(o.lotName)} · ${o.stock} uds. · ${money(o.unitPriceCents)}`,
+                  `data-i="${i}"`,
+                ),
+              )
+              .join("") + button("cancel-lot", "Cancelar");
+          notice("Selecciona la tirada de esta prenda.");
+        } catch (error) {
+          if (!scan) throw error;
+          if (current()) {
+            validationError = true;
+            // Do not cache failures: stock or connectivity may recover on retry.
+            scan.session.resolved.delete(value);
+            scanResult(scan, false, error.message.replace(/\.$/, ""));
+          }
         }
-        if (choices.length)
-          throw Error("Elige o cancela primero la tirada pendiente.");
-        if (!/^CR[XL][0-9]{10}$/.test(value))
-          throw Error("Código de prenda no válido.");
-        const opts = await api("barcode", { code: value });
-        if (!current()) return;
-        if (opts.length === 1) {
-          if (await add(opts[0], 1, current)) beep();
-          return;
-        }
-        closeCamera();
-        choices = opts;
-        target.innerHTML =
-          opts
-            .map((o, i) =>
-              button(
-                "lot",
-                `${esc(o.lotName)} · ${o.stock} uds. · ${money(o.unitPriceCents)}`,
-                `data-i="${i}"`,
-              ),
-            )
-            .join("") + button("cancel-lot", "Cancelar");
-        notice("Selecciona la tirada de esta prenda.");
       },
-      credential ? "Identificando…" : "Leyendo código…",
+      scan ? undefined : credential ? "Identificando…" : "Leyendo código…",
     ).finally(() => {
       if (version === epoch) identifying = false;
     });
   }
   function closeCamera() {
+    const previous = cameraSession;
+    cameraSession = null;
+    if (previous) {
+      previous.timers.forEach(clearTimeout);
+      work.querySelector("[data-camera-indicators]")?.replaceChildren();
+      notice();
+    }
+    if (choiceScan) {
+      choices = [];
+      choiceScan = null;
+      work.querySelector("[data-choice]")?.replaceChildren();
+    }
     window.CRONOX_REGISTER_CAMERA.stop();
     const panel = work.querySelector("[data-camera]");
     if (panel) panel.hidden = true;
@@ -699,13 +770,21 @@
   function camera(deviceId) {
     const panel = work.querySelector("[data-camera]");
     panel.hidden = false;
+    if (!cameraSession) cameraSession = {
+      accepted: new Set(), codes: new Set(), resolved: new Map(), timers: new Set(),
+    };
+    const active = cameraSession;
     window.CRONOX_REGISTER_CAMERA.start({
       video: panel.querySelector("video"),
       devices: panel.querySelector("select"),
       deviceId,
       format: step === "credential" ? "qr_code" : "code_128",
-      onRead: read,
+      onRead: (value, detection) => {
+        if (active !== cameraSession) return;
+        return step === "credential" ? read(value, { session: active, detection }) : cameraRead(value, detection, active);
+      },
       onError: (msg) => {
+        if (active !== cameraSession) return;
         closeCamera();
         notice(msg, true);
       },
@@ -838,12 +917,23 @@
         b.parentElement
           .querySelectorAll("button")
           .forEach((btn) => (btn.disabled = true));
-        run(async (c) => {
+        const scan = choiceScan;
+        run(async (valid) => {
+          const c = () => valid() && (!scan || scan.session === cameraSession);
+          if (!c()) return;
           try {
             if (await add(o, 1, c)) {
               choices = [];
               work.querySelector("[data-choice]").replaceChildren();
-              beep();
+              choiceScan = null;
+              if (scan) acceptScan(scan, o);
+              else beep();
+            }
+          } catch (error) {
+            if (!scan) throw error;
+            if (c()) {
+              validationError = true;
+              scanResult(scan, false, error.message.replace(/\.$/, ""));
             }
           } finally {
             if (c())
@@ -855,6 +945,7 @@
       }
     }
     if (act === "cancel-lot") {
+      choiceScan = null;
       choices = [];
       work.querySelector("[data-choice]").replaceChildren();
       notice();
@@ -904,9 +995,15 @@
       if (changes) notice("Oferta o precio actualizado: " + changes);
     }, feedback.textContent);
   }
+  window.addEventListener("pagehide", closeCamera);
   window.CRONOX_REGISTER = {
     syncReset,
     open() {
+      // Re-selecting the current admin section must not close an active reader session.
+      if (cameraSession && work.querySelector("[data-camera] video")?.isConnected) {
+        drawTicket();
+        return;
+      }
       if (step === "after-sales" || window.CRONOX_AFTER_SALES.hasPending()) {
         step = "after-sales";
         window.CRONOX_AFTER_SALES.open({

@@ -310,3 +310,14 @@
 #section-register [data-as=confirm] {width:100%;background:var(--accent);color:#191b19;font-weight:bold;margin-top:10px;}
 #section-register [data-as-field] {margin-block:6px;}
 #section-register .register-after-units {max-height:65vh;overflow:auto;}
+#register-feedback { min-height: 3em; display: flex; align-items: center; gap: 9px; }
+#register-feedback svg { width: 26px; height: 26px; flex: 0 0 26px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+#register-feedback.register-success { color: #75eb9d; }
+#register-feedback.register-error { color: #ff8686; }
+#section-register .register-camera-view { position: relative; width: fit-content; max-width: 100%; margin: 10px auto; }
+#section-register .register-camera-view video { margin: 0; max-height: 260px; width: auto; max-width: 100%; }
+#section-register [data-camera-indicators] { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#section-register .register-camera-result { position: absolute; transform: translate(-50%, -50%); display: grid; place-items: center; width: 76px; height: 76px; border-radius: 12px; background: #111d; box-shadow: 0 2px 12px #0008; }
+#section-register .register-camera-result svg { width: 60px; height: 60px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+#section-register .register-camera-result.register-success { color: #75eb9d; }
+#section-register .register-camera-result.register-error { color: #ff6b6b; border: 3px solid currentColor; }
