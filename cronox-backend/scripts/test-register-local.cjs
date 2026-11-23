@@ -99,14 +99,10 @@ async function main() {
       .filter({ hasText: 'BLACK' })
       .first();
     await product.locator('summary').click();
-    await product
-      .locator('select')
-      .selectOption(
-        await product
-          .locator('option:not([disabled])')
-          .first()
-          .getAttribute('value'),
-      );
+    const lotSelect = product.locator('[name=lot]');
+    await lotSelect.selectOption(await lotSelect.locator('option').evaluateAll(rows => rows.find(o => o.value && !o.textContent.includes('Agotada')).value));
+    await expect(product.locator('[name=option]')).toBeEnabled();
+    await product.locator('[name=option]').selectOption({index:1});
     await product.locator('input').fill('2');
     await product.getByRole('button', { name: 'Añadir' }).click();
     await expect(footer).toContainText('4 uds.');

@@ -479,6 +479,7 @@ async function main() {
         act = (x) => rootEl.locator('[data-act="' + x + '"]');
       const beforeCancellation = { orders: await db.order.count(), operations: await db.afterSaleOperation.count(), movements: await db.stockMovement.count() };
       await require('./register-cancellation-browser.cjs')(page, customer, out);
+      await require('./register-manual-lots-browser.cjs')(page, db, out, point.id);
       assert.deepEqual({ orders: await db.order.count(), operations: await db.afterSaleOperation.count(), movements: await db.stockMovement.count() }, beforeCancellation);
       await act('purchase').click();
       await act('no-event').click();
@@ -486,6 +487,10 @@ async function main() {
       await act('manual').click();
       const card = rootEl.locator('details').first();
       await card.locator('summary').click();
+      const lots = card.locator('[name=lot]');
+      await lots.selectOption(await lots.locator('option').evaluateAll(rows => rows.find(o => o.value && !o.textContent.includes('Agotada')).value));
+      await expect(card.locator('[name=option]')).toBeEnabled();
+      await card.locator('[name=option]').selectOption({index:1});
       await card.getByRole('button', { name: 'Añadir', exact: true }).click();
       await expect(rootEl.locator('aside footer')).toContainText('1 uds.');
       await expect(act('paid')).toBeDisabled();

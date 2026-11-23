@@ -440,7 +440,7 @@
     notice("Consultando catálogo…");
     try {
       const data = await api(
-        "catalog?q=" + encodeURIComponent(query) + "&offset=" + offset,
+        "catalog?q=" + encodeURIComponent(query) + "&offset=" + offset + pointQuery(),
       );
       if (active !== epoch || version !== searchVersion) return;
       products = data.products;
@@ -454,12 +454,15 @@
             ) => `<details><summary>${img(p.image)}<span><strong>${esc(p.modelName)}</strong><small>${esc(p.color || "—")}</small></span></summary>
         ${
           p.options.length
-            ? `<form data-form="product" data-i="${i}"><label>Talla y tirada<select name="option">${p.options.map((o, j) => `<option value="${j}" ${o.stock ? "" : "disabled"}>${esc(o.size)}${o.lotName ? " · " + esc(o.lotName) : ""} · ${o.stock} uds. · ${money(o.unitPriceCents)}</option>`).join("")}</select></label>
-        <label>Unidades<input type="number" name="qty" min="1" max="999" value="1" required></label><button ${p.options.some((o) => o.stock > 0) ? "" : "disabled"}>Añadir</button></form>`
+            ? manualForm(p, i)
             : "<p>No disponible para vender.</p>"
         }</details>`,
           )
           .join("") || "<p>Sin resultados.</p>";
+      work.querySelectorAll('[data-form="product"]').forEach((form) => {
+        const p = products[Number(form.dataset.i)];
+        populateSizes(form, p.options);
+      });
       work
         .querySelector("[data-products]")
         .insertAdjacentHTML(
@@ -471,6 +474,69 @@
     } catch (e) {
       if (active === epoch && version === searchVersion)
         notice(e.message, true);
+    }
+  }
+  const pointQuery = () => ticket.point?.id ? "&pointId=" + encodeURIComponent(ticket.point.id) : "";
+  const lotKey = (id) => JSON.stringify(id ?? null);
+  function manualForm(product, i) {
+    const lots = [...new Map(product.options.map(o => [lotKey(o.lotId), {
+      key: lotKey(o.lotId), number: o.lotNumber,
+      stock: product.options.some(size => size.lotId === o.lotId && size.stock > 0),
+    }])).values()].sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+    return `<form data-form="product" data-i="${i}"><label>Tirada<select name="lot" required>
+      ${lots.length > 1 ? '<option value="">Selecciona una tirada</option>' : ''}
+      ${lots.map(lot => `<option value="${esc(lot.key)}">${lot.number == null ? 'Sin tirada registrada' : 'Tirada ' + lot.number}${lot.stock ? '' : ' · Agotada'}</option>`).join('')}
+      </select></label><label>Talla<select name="option" required disabled><option value="">Selecciona una talla</option></select></label>
+      <label>Unidades<input type="number" name="qty" min="1" max="999" value="1" required></label><button type="submit" disabled>Añadir</button><small data-manual-status role="status" aria-live="polite"></small></form>`;
+  }
+  function manualOption(form) {
+    const p = products[Number(form.dataset.i)];
+    return p?.options.find(o => String(o.variantId) === form.elements.option.value && lotKey(o.lotId) === form.elements.lot.value);
+  }
+  function validateManual(form) {
+    const option = manualOption(form), qty = form.elements.qty;
+    const available = option?.stock ?? 0;
+    qty.max = String(Math.min(999, available));
+    form.querySelector('[type="submit"]').disabled = !!form.dataset.loading || !available || !qty.validity.valid;
+  }
+  function populateSizes(form, options) {
+    const rows = options.filter(o => lotKey(o.lotId) === form.elements.lot.value);
+    form.elements.option.innerHTML = '<option value="">Selecciona una talla</option>' + rows.map(o => `<option value="${o.variantId}" ${o.stock > 0 ? '' : 'disabled'}>${esc(o.size)} · ${o.stock > 0 ? o.stock + ' disponibles' : 'Sin stock'} · ${money(o.unitPriceCents)}</option>`).join('');
+    form.elements.option.disabled = !rows.some(o => o.stock > 0);
+    form.querySelector('[data-manual-status]').textContent = rows.length && !rows.some(o => o.stock > 0) ? 'Tirada agotada: no hay tallas disponibles.' : '';
+    validateManual(form);
+  }
+  async function changeManualLot(form) {
+    const version = String(Number(form.dataset.version || 0) + 1), active = epoch, key = form.elements.lot.value;
+    form.dataset.version = version;
+    form.dataset.loading = 'true';
+    form.elements.option.value = '';
+    form.elements.option.disabled = true;
+    validateManual(form);
+    const status = form.querySelector('[data-manual-status]');
+    status.textContent = key ? 'Consultando tallas, existencias y precios…' : '';
+    const current = () => active === epoch && form.isConnected && form.dataset.version === version && form.elements.lot.value === key;
+    if (!key) { delete form.dataset.loading; populateSizes(form, []); return; }
+    try {
+      const p = products[Number(form.dataset.i)];
+      const data = await api('catalog?productId=' + p.id + pointQuery());
+      if (!current()) return;
+      const fresh = data.products.find(product => product.id === p.id);
+      if (!fresh) throw Error('Este producto ya no está disponible. Actualiza el catálogo.');
+      p.options = fresh.options;
+      for (const option of form.elements.lot.options) {
+        if (!option.value) continue;
+        const rows = p.options.filter(row => lotKey(row.lotId) === option.value);
+        if (rows.length) option.textContent = (rows[0].lotNumber == null ? 'Sin tirada registrada' : 'Tirada ' + rows[0].lotNumber) + (rows.some(row => row.stock > 0) ? '' : ' · Agotada');
+      }
+      delete form.dataset.loading;
+      populateSizes(form, p.options);
+      if (!p.options.some(o => lotKey(o.lotId) === key)) status.textContent = 'Esta tirada ya no está disponible. Actualiza el catálogo.';
+    } catch (error) {
+      if (!current()) return;
+      delete form.dataset.loading;
+      populateSizes(form, []);
+      status.textContent = error.message + ' Vuelve a seleccionar la tirada para reintentar.';
     }
   }
   const itemInputs = () =>
@@ -646,12 +712,21 @@
     });
   }
   root.addEventListener("change", (e) => {
+    const form = e.target.closest('[data-form="product"]');
+    if (form) {
+      if (e.target.name === 'lot') changeManualLot(form);
+      else validateManual(form);
+    }
     if (e.target.name === "register-payment") {
       paymentMethod = e.target.value;
       syncPaid();
     }
 
     if (e.target.matches("[data-devices]")) camera(e.target.value);
+  });
+  root.addEventListener('input', (e) => {
+    const form = e.target.closest('[data-form="product"]');
+    if (form) validateManual(form);
   });
   root.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -670,9 +745,10 @@
       listProducts();
     }
     if (f.dataset.form === "product") {
-      const o = products[+f.dataset.i]?.options[+data.get("option")],
+      const o = manualOption(f),
         q = Number(data.get("qty"));
-      if (o) run((c) => add(o, q, c), "Actualizando ticket…");
+      validateManual(f);
+      if (o && !f.querySelector('[type="submit"]').disabled) run((c) => add(o, q, c), "Actualizando ticket…");
     }
   });
   root.addEventListener("click", (e) => {

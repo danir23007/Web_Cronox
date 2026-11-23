@@ -13,12 +13,14 @@ const live = {
   inventoryLots: [
     {
       id: 'new',
+      number: 3,
       name: 'Nueva',
       slices: [{ variantId: 13, available: 4 }],
       profile: { price: 1234 },
     },
     {
       id: 'old',
+      number: 11,
       name: 'Anterior',
       slices: [{ variantId: 13, available: 5 }],
       webOfferPriceCents: 100,
@@ -40,6 +42,17 @@ function register(product: unknown = live) {
   return new RegisterController(db as any);
 }
 describe('ticket presencial', () => {
+  it('expone el número real de cada tirada, filtra el producto y valida el contexto sin escribir', async () => {
+    const db = { product: { findMany: jest.fn().mockResolvedValue([live]) }, salePoint: { findFirst: jest.fn().mockResolvedValue({id:'point'}) } };
+    const controller = new RegisterController(db as any);
+    const data = await controller.catalog({q:'',offset:0,productId:1,pointId:'point'});
+    expect(data.products[0].options.map(o => [o.lotId,o.lotNumber])).toEqual([['new',3],['old',11]]);
+    expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({id:1})}));
+    expect(db.salePoint.findFirst).toHaveBeenCalledWith({where:{id:'point',archived:false,deletedAt:null},select:{id:true}});
+    db.salePoint.findFirst.mockResolvedValue(null as any);
+    await expect(controller.catalog({q:'',offset:0,pointId:'missing'})).rejects.toThrow('punto de venta');
+    expect(db.product.findMany).toHaveBeenCalledTimes(1);
+  });
   it('aplica la oferta de cada lote con las mismas fechas y desactivación del checkout', async () => {
     const now = new Date();
     const offer = {

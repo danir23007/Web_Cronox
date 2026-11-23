@@ -61,6 +61,8 @@ class Barcode {
   @Matches(/^CR[XL][0-9]{10}$/) code!: string;
 }
 class Search {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) productId?: number;
+  @IsOptional() @IsString() @MaxLength(100) pointId?: string;
   @IsOptional() @IsString() @MaxLength(120) q = '';
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1000000) offset = 0;
 }
@@ -121,6 +123,7 @@ export function registerOptions(product: Product, now = new Date()) {
         color: presentation.color,
         lotId,
         lotName,
+        lotNumber: lotId === null ? null : product.inventoryLots.find((lot) => lot.id === lotId)!.number,
         stock,
         unitPriceCents: pricing.effectivePrice,
         previousPriceCents: pricing.previousPrice,
@@ -255,9 +258,14 @@ export class RegisterController {
   @Get('catalog') @Header('Cache-Control', 'no-store') async catalog(
     @Query() query: Search,
   ) {
+    if (query.pointId && !(await this.db.salePoint.findFirst({
+      where: { id: query.pointId, archived: false, deletedAt: null },
+      select: { id: true },
+    }))) throw new ConflictException('Este punto de venta ya no está disponible.');
     const contains = { contains: query.q.trim(), mode: 'insensitive' } as const;
     const products = await this.db.product.findMany({
       where: {
+        ...(query.productId ? { id: query.productId } : {}),
         isActive: true,
         currency: 'EUR',
         OR: [
