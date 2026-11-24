@@ -277,6 +277,7 @@ describe('AdminUsersService protected user updates', () => {
   it('returns the same account phone in the list and detail endpoints', async () => {
     const accountUser = { ...current, phone: '+12025550184', addresses: [] };
     const readPrisma = {
+      adminNote: { findMany: jest.fn().mockResolvedValue([]) },
       user: {
         findMany: jest.fn().mockResolvedValue([accountUser]),
         count: jest.fn().mockResolvedValue(1),

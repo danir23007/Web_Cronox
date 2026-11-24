@@ -1,3 +1,4 @@
+import { recordEventRegistration } from './event-registration';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role, User, UserAccountState } from '@prisma/client';
 import { randomBytes } from 'crypto';
@@ -38,6 +39,7 @@ export class UsersService {
     name?: string;
     firstName?: string;
     lastName?: string;
+    eventRegistration?: boolean;
     role?: Role;
     memberCode?: string;
     newsletterSubscribed?: boolean;
@@ -56,20 +58,21 @@ export class UsersService {
       }
       const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalizeEmail(data.email) } });
       if (subscription?.userId) throw new ConflictException('La suscripción requiere revisión antes de crear la cuenta.');
-      const { memberCode, ...userData } = data;
+      const { memberCode, eventRegistration, ...userData } = data;
       const ensuredCode = memberCode ?? (await getNextSequentialMemberCode(tx));
 
       const user = await tx.user.create({
         data: {
           ...userData,
-          newsletterSubscribed: Boolean(subscription?.subscribedAt) || Boolean(userData.newsletterSubscribed),
+          newsletterSubscribed: eventRegistration ? false : Boolean(subscription?.subscribedAt) || Boolean(userData.newsletterSubscribed),
+          ...(eventRegistration ? { role: Role.USER } : {}),
           accountState: UserAccountState.ACTIVE,
           registrationClaimable: false,
           email: normalizeEmail(userData.email),
           memberCode: ensuredCode,
         },
       });
-      if (data.newsletterSubscribed) {
+      if (!eventRegistration && data.newsletterSubscribed) {
         // Account, consent, personal code and welcome outbox share this commit.
         // Preserve historical consent/verification/delivery metadata on retries.
         await tx.newsletterSubscription.upsert({
@@ -80,6 +83,7 @@ export class UsersService {
       } else if (subscription) {
         await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
       }
+      if (eventRegistration) await recordEventRegistration(tx, user);
       return ensureAccountWelcome(tx, user.id, true);
     });
   }

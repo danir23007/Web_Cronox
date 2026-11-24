@@ -230,12 +230,17 @@ export class AdminUsersService {
         select: { code: true, createdAt: true },
       }),
     ]);
+    const observationNotes = await this.prisma.adminNote.findMany({
+      where: { targetType: 'user', targetId: String(id), isDeleted: false },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { content: true },
+    });
     const originalWelcome = [legacyWelcome, newsletterWelcome].filter(Boolean).sort((a, b) => a!.createdAt.getTime() - b!.createdAt.getTime())[0];
 
     return {
       user: {
         id: user.id,
         identityUid: user.identityUid,
+        observations: [...new Set(observationNotes.map(note => note.content.trim()).filter(Boolean))].join('\n'),
         memberCode: user.memberCode,
         email: user.email,
         welcomeCode: user.firstOrderDiscountCode ?? originalWelcome?.code ?? null,

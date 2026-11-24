@@ -2539,7 +2539,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     authOverlay.classList.add('is-open');
     authOverlay.classList.remove('auth-hidden');
     authOverlay.setAttribute('aria-hidden', 'false');
-    lockBody();
+    if (!(document.body?.dataset.registrationSource === 'event')) lockBody();
     const focusInput = currentView === 'register' ? (newsletterRegistration ? registerFirstName : registerEmail) : loginEmail;
     if (focusInput) setTimeout(() => {
       // A fast tap/autofill may already have selected another field. Do not
@@ -2553,7 +2553,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const closeAuthModal = () => {
-    if (!authOverlay) return;
+    if ((document.body?.dataset.registrationSource === 'event') || !authOverlay) return;
     const returnFocus = authReturnFocus;
     authReturnFocus = null;
     authOverlay.classList.remove('is-open');
@@ -2882,7 +2882,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     authDialog?.addEventListener('click', (ev) => ev.stopPropagation());
     const consentAboveAuth = () => Boolean(document.querySelector('.cronox-consent:not([hidden]), .cronox-consent-panel:not([hidden])'));
     document.addEventListener('keydown', (event) => {
-      if (!authOverlay?.classList.contains('is-open') || consentAboveAuth()) return;
+      if ((document.body?.dataset.registrationSource === 'event') || !authOverlay?.classList.contains('is-open') || consentAboveAuth()) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         closeAuthModal();
@@ -2980,6 +2980,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const ensureAuthModal = async () => {
+    if ((document.body?.dataset.registrationSource === 'event') && document.getElementById('authOverlay')) { authLoaded = true; return true; }
     if (authLoaded) return true;
     if (authLoadPromise) return authLoadPromise;
 
@@ -3472,6 +3473,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const initNewsletterModal = () => {
+    if ((document.body?.dataset.registrationSource === 'event')) return;
     if (window.parent !== window && new URLSearchParams(location.search).get('mediaPreview') === '1') return;
     if (newsletterState.initialized) return;
     newsletterState.initialized = true;
@@ -3643,6 +3645,10 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     window.CRONOX_AUTH_READY = initAuthState({ initial: true });
     const ready = await prepareAuthExperience();
     if (!ready) return;
+    if ((document.body?.dataset.registrationSource === 'event')) {
+      await openAuthModal('register');
+      return;
+    }
     await window.CRONOX_AUTH_READY;
 
     const entryUrl = new URL(location.href);

@@ -21,8 +21,8 @@ export class RegisterDto {
   // Explicit newsletter registration: consent is committed with the new account.
   // This never verifies an address or authorizes claiming an existing account.
   @IsOptional()
-  @IsIn(['newsletter'])
-  registrationSource?: 'newsletter';
+  @IsIn(['newsletter', 'event'])
+  registrationSource?: 'newsletter' | 'event';
 
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()

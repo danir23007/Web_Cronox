@@ -435,6 +435,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
       { label: 'ID de usuario', value: window.CRONOX_USER_IDENTITY.format(user) },
       { label: 'ID interno', value: user.id },
       { label: 'Email', value: user.email },
+      { label: 'Observaciones', value: user.observations },
       { label: 'Código de bienvenida', value: user.welcomeCode || 'Sin código asignado' },
       { label: 'Nombre', value: user.name || user.firstName },
       { label: 'Apellidos', value: user.lastName },
