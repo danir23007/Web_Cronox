@@ -35,7 +35,7 @@ async function main() {
         const frames = [...document.querySelectorAll('.cart-mail-thumbnail')]; assert.ok(frames.length);
         for (const frame of frames) {
           assert.equal(frame.getAttribute('width'), '70'); assert.equal(frame.getAttribute('height'), '70');
-          assert.equal(frame.querySelector('td').getAttribute('bgcolor'), '#242428');
+          assert.equal(frame.querySelector('td').getAttribute('bgcolor'), null);
         }
         assert.equal(document.querySelector('.cronox-footer-rule').closest('table').getAttribute('width'), '210');
         const support = document.querySelector('a[href="mailto:support@cronox.es"]').parentElement;

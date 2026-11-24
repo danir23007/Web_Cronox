@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs/promises'), path = require('node:path'), assert = require('node:assert/strict'), sharp = require('sharp');
 const { pathToFileURL } = require('node:url');
-const root = path.resolve(__dirname, '../..'), output = path.join(root, 'output/playwright/cart-mail-square');
+const root = path.resolve(__dirname, '../..'), output = path.join(root, 'output/playwright/cart-mail-cover');
 async function main() {
   const alpha = {};
   for (const name of ['instagram', 'tiktok', 'youtube']) {
@@ -39,7 +39,7 @@ async function main() {
             overflow: document.documentElement.scrollWidth > innerWidth };
         }, alpha);
         assert.equal(metrics.images.length, 3); for (const image of metrics.images) { assert.ok(image.width <= 70 && image.height <= 70); assert.ok(Math.abs(image.width / image.height - image.naturalWidth / image.naturalHeight) < .01); }
-        for (const image of metrics.images) { assert.equal(image.frameWidth, 70); assert.equal(image.frameHeight, 70); assert.ok(image.centeredX < 1 && image.centeredY < 1); assert.equal(image.background, 'rgb(36, 36, 40)'); }
+        for (const image of metrics.images) { assert.equal(image.frameWidth, 70); assert.equal(image.frameHeight, 70); assert.ok(image.centeredX < 1 && image.centeredY < 1); assert.equal(image.background, 'rgba(0, 0, 0, 0)'); assert.equal(image.naturalWidth, 140); assert.equal(image.naturalHeight, 140); assert.equal(image.width, 70); assert.equal(image.height, 70); }
         assert.equal(metrics.ruleWidth, 210); assert.ok(metrics.ruleCentered < 1);
         assert.equal(metrics.supportBreaks, 0); assert.equal(metrics.supportText, 'Si tienes cualquier problema o duda, escríbenos: support@cronox.es');
         if (mode === 'desktop') assert.ok(metrics.supportHeight <= 20);

@@ -2,6 +2,19 @@ import sharp from 'sharp';
 import { OrderProductImageController } from './order-product-image.controller';
 
 describe('public order-only image resource', () => {
+  it('serves the separate square basket photo anonymously with safe catalogue fallback and caching', async () => {
+    const url='https://catalogue.example.test/storage/v1/object/public/product-images/tee.png';
+    const source=await sharp({create:{width:200,height:400,channels:3,background:'#138b37'}}).png().toBuffer();
+    const fetch=jest.fn().mockImplementation(async()=>new Response(new Uint8Array(source)));global.fetch=fetch;
+    const findFirst=jest.fn().mockResolvedValue({images:[],imageUrl:url});
+    const controller=new OrderProductImageController({product:{findFirst}} as any);
+    const response:any={set:jest.fn().mockReturnThis(),send:jest.fn()};
+    await controller.cartImage(42,response);await controller.cartImage(42,response);
+    expect(findFirst.mock.calls[0][0].where).toEqual({id:42,isActive:true});expect(fetch).toHaveBeenCalledTimes(1);
+    const meta=await sharp(response.send.mock.calls[0][0]).metadata();expect([meta.width,meta.height]).toEqual([140,140]);
+    findFirst.mockResolvedValue({images:[],imageUrl:'https://attacker.test/private.png'});
+    await expect(controller.cartImage(43,response)).rejects.toThrow();expect(fetch).toHaveBeenCalledTimes(1);
+  });
   const originalFetch=global.fetch,originalStorage=process.env.SUPABASE_URL;
   beforeEach(()=>{process.env.SUPABASE_URL='https://catalogue.example.test'});
   afterEach(()=>{global.fetch=originalFetch;if(originalStorage===undefined)delete process.env.SUPABASE_URL;else process.env.SUPABASE_URL=originalStorage});

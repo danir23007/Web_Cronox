@@ -1,12 +1,22 @@
 import { Controller, Get, NotFoundException, Param, ParseIntPipe, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
-import { createOrderProductThumbnail, trustedOrderImageUrl, OrderThumbnailFraming } from './managed/order-product-thumbnail';
+import { createOrderProductThumbnail, createCartProductThumbnail, trustedOrderImageUrl, OrderThumbnailFraming } from './managed/order-product-thumbnail';
 
 @Controller('email/order-product-image')
 export class OrderProductImageController {
   private readonly cache = new Map<string, Buffer>();
   constructor(private readonly db: PrismaService) {}
+
+  @Get('cart/:id.png')
+  async cartImage(@Param('id', ParseIntPipe) id: number, @Res() response: Response) {
+    const product = await this.db.product.findFirst({ where: { id, isActive: true }, select: {
+      imageUrl: true, images: { where: { isActive: true, archivedAt: null }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }], take: 1, select: { url: true } },
+    } });
+    const source = product?.images[0]?.url || product?.imageUrl;
+    if (!source || !trustedOrderImageUrl(source)) throw new NotFoundException();
+    return this.serveSource(source, response, 'cart');
+  }
 
   @Get(':id.png')
   async image(@Param('id', ParseIntPipe) id: number, @Res() response: Response) {
@@ -21,16 +31,21 @@ export class OrderProductImageController {
   private async serve(id: number, response: Response, framing: OrderThumbnailFraming) {
     const image = await this.db.productImage.findFirst({ where: { id, isActive: true, archivedAt: null } });
     if (!image || !trustedOrderImageUrl(image.url)) throw new NotFoundException();
-    const cacheKey = `${framing}:${image.url}`;
+    return this.serveSource(image.url, response, framing);
+  }
+
+  private async serveSource(url: string, response: Response, framing: OrderThumbnailFraming | 'cart') {
+    const cacheKey = `${framing}:${url}`;
     let buffer = this.cache.get(cacheKey);
     if (!buffer) {
       // Only the configured public catalogue bucket, no redirects, credentials
       // or arbitrary client-supplied URL. Limit both encoded and decoded sizes.
-      const original = await fetch(image.url, { redirect: 'error', signal: AbortSignal.timeout(15000) });
+      const original = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(15000) });
       if (!original.ok || Number(original.headers.get('content-length')) > 20_000_000) throw new NotFoundException();
       const chunks: Uint8Array[] = []; let length = 0;
       for await (const chunk of original.body!) { length += chunk.length; if (length > 20_000_000) throw new NotFoundException(); chunks.push(chunk); }
-      buffer = (await createOrderProductThumbnail(Buffer.concat(chunks), framing)).buffer;
+      const source = Buffer.concat(chunks);
+      buffer = framing === 'cart' ? await createCartProductThumbnail(source) : (await createOrderProductThumbnail(source, framing)).buffer;
       if (this.cache.size >= 100) this.cache.delete(this.cache.keys().next().value!);
       this.cache.set(cacheKey, buffer);
     }

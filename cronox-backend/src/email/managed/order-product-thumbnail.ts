@@ -1,5 +1,17 @@
 import sharp from 'sharp';
 
+/** Basket photos cover the frame in the actual resource, including in clients
+ * without object-fit support. No margins, flattening, trim or original writes. */
+export function createCartProductThumbnail(source: Buffer) {
+  return sharp(source, { limitInputPixels: 40_000_000 }).rotate()
+    .resize(140, 140, { fit: 'cover', position: 'centre' }).png().toBuffer();
+}
+
+export function cartProductThumbnail(product: { id?: number }) {
+  return { imageUrl: product.id && Number.isSafeInteger(product.id) && product.id > 0
+    ? `https://cronox.es/api/email/order-product-image/cart/${product.id}.png?v=1` : '', imageWidth: 70, imageHeight: 70 };
+}
+
 /** Only remove near-white/transparent empty margins. Never crop a non-white
  * pixel, never enlarge by more than 18%, and keep the full original otherwise. */
 export type OrderThumbnailFraming = 'confirmation' | 'delivered';

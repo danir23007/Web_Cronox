@@ -17,7 +17,7 @@ describe('abandoned cart eligibility and delivery boundaries', () => {
 
   const fixture = () => ({ items: [{ qty: 2, lotAtAdd: 'current', variant: {
     isActive: true, stockQty: 3, size: 'M', price: 4500, product: {
-      name: 'Camiseta', currency: 'EUR', price: 4900, isActive: true, activeLotId: 'current',
+      id: 42, name: 'Camiseta', currency: 'EUR', price: 4900, isActive: true, activeLotId: 'current',
       images: [{ url: 'https://example.test/actual.png' }], inventoryLots: [{ id: 'current',
         webOfferPriceCents: 3900, webOfferPreviousCents: 4500, webOfferConfirmedAt: new Date('2029-01-01'),
         webOfferStartsAt: new Date('2030-01-01'), webOfferEndsAt: new Date('2030-01-02') }],
@@ -64,7 +64,7 @@ describe('abandoned cart eligibility and delivery boundaries', () => {
     const signature = { blocks: [{ type: 'text', text: 'Firma compartida CRONOX' }] };
     const rendered = renderMail(document, 'Tu carrito', '', 'CART_ABANDONED', data, signature, true);
     expect(rendered.html).toContain('VOLVER A MI CESTA'); expect(rendered.html).not.toContain(data.unsubscribeUrl);
-    expect(rendered.html).not.toContain('Firma compartida CRONOX'); expect(rendered.html).toContain('https://example.test/actual.png');
+    expect(rendered.html).not.toContain('Firma compartida CRONOX'); expect(rendered.html).toContain('https://cronox.es/api/email/order-product-image/cart/42.png?v=1');
     expect(rendered.text).toContain('Camiseta');
     expect(() => renderMail({ blocks: [{ type: 'text', text: 'Sin datos' }] }, 'Carrito', '', 'CART_ABANDONED', data, undefined, true)).toThrow();
   });

@@ -14,11 +14,13 @@ const { NEWSLETTER_ACCESS_COPY } = require('../src/email/managed/mail-editor-con
 const { mailCircleNumber } = require('../src/email/managed/mail-circle-folders');
 const { cartAbandonedDocument, CART_COPY } = require('../src/email/managed/cart-abandoned-design');
 const { containedOrderImage } = require('../src/email/managed/order-product-image');
+const { createCartProductThumbnail } = require('../src/email/managed/order-product-thumbnail');
 const { composeApplicationMail } = require('../src/email/mail-footer-composition');
 const { compileMailMessage } = require('../src/email/mail-message');
 const noSmtp = new Proxy({}, { get() { throw Error('SMTP_FORBIDDEN'); } });
 async function fixtures() {
   const result = [];
+  fs.writeFileSync(path.join(output, 'cart-preview.png'), await createCartProductThumbnail(fs.readFileSync(path.join(root, 'cronox-front/assets/products/camiseta_washed_negra.png'))));
   const photo = await require('sharp')(path.join(root, 'cronox-front/assets/products/camiseta_washed_negra.png')).metadata();
   const build = async (db, templates) => {
     const service = new ManagedMailService(db, noSmtp);
@@ -37,7 +39,7 @@ async function fixtures() {
     for (const [name, purpose] of [['short', 'PASSWORD_RESET'], ['long', 'ORDER_CONFIRMATION'], ['basket', 'CART_ABANDONED']]) {
       const data = { ...mailPreviewData(purpose, 1), circleLevel: 1 };
       const count = name === 'long' ? 12 : 3;
-      data.items = Array.from({ length: count }, (_, i) => ({ ...data.items[0], imageUrl: 'https://cronox.es/assets/products/camiseta_washed_negra.png', ...containedOrderImage(photo.width, photo.height), name: `Prenda de ejemplo ${i + 1}` }));
+      data.items = Array.from({ length: count }, (_, i) => ({ ...data.items[0], imageUrl: 'https://cronox.es/assets/products/camiseta_washed_negra.png', ...containedOrderImage(photo.width, photo.height), ...(purpose === 'CART_ABANDONED' ? { imageUrl: 'https://cronox.es/assets/mail/footer-spacing-cart.png', imageWidth: 70, imageHeight: 70 } : {}), name: `Prenda de ejemplo ${i + 1}` }));
       const rendered = await service.render('NOREPLY', { purpose, document: purpose === 'CART_ABANDONED' ? cartAbandonedDocument() : structuredDocumentForPurpose(purpose), subject: purpose === 'CART_ABANDONED' ? CART_COPY.subject : 'Vista previa CRONOX', preheader: '', signatureMode: 'none' }, data, true);
       result.push({ name, purpose, ...rendered });
     }
@@ -89,6 +91,7 @@ async function main() {
       const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme });
       await context.route('**/*', async route => {
         const url = new URL(route.request().url());
+        if (url.hostname === 'cronox.es' && url.pathname === '/assets/mail/footer-spacing-cart.png') return route.fulfill({ path: path.join(output, 'cart-preview.png') });
         if (url.hostname === 'cronox.es' && url.pathname.startsWith('/assets/')) {
           const file = path.resolve(root, 'cronox-front', '.' + url.pathname);
           if (file.startsWith(path.join(root, 'cronox-front') + path.sep) && fs.existsSync(file)) return route.fulfill({ path: file });

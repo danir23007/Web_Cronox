@@ -25,16 +25,16 @@ describe('approved abandoned basket design', () => {
       expect([frame.width, frame.getAttribute('height')]).toEqual(['70', '70']);
       expect(frame.style.width).toBe('70px'); expect(frame.style.height).toBe('70px');
       const cell = frame.querySelector('td')!;
-      expect(cell.getAttribute('bgcolor')).toBe('#242428');
-      expect(cell.style.backgroundColor).toBe('rgb(36, 36, 40)');
+      expect(cell.getAttribute('bgcolor')).toBeNull();
+      expect(cell.style.backgroundColor).toBe('');
       expect(cell.getAttribute('align')).toBe('center'); expect(cell.getAttribute('valign')).toBe('middle');
     }
     const images = rows.map(row => row.querySelector('img')!);
-    expect(images.map(img => [img.getAttribute('width'), img.getAttribute('height')])).toEqual([['35', '70'], ['70', '35'], ['70', '70']]);
+    expect(images.map(img => [img.getAttribute('width'), img.getAttribute('height')])).toEqual([['70', '70'], ['70', '70'], ['70', '70']]);
     expect(images.every(img => !img.getAttribute('style')!.includes('object-fit'))).toBe(true);
   });
   it('uses stored photo dimensions in real reminder data without changing quantity or eligibility', () => {
-    const cart: any = { items: [{ qty: 2, lotAtAdd: 'lot', variant: { isActive: true, stockQty: 2, price: 2500, size: 'M', product: { name: 'Prenda', isActive: true, currency: 'EUR', activeLotId: 'lot', price: 2500, inventoryLots: [], images: [{ url: 'https://example.test/photo.png', width: 400, height: 800 }] } } }] };
-    expect(purchasableReminderItems(cart)[0]).toMatchObject({ imageWidth: 35, imageHeight: 70, quantity: 2 });
+    const cart: any = { items: [{ qty: 2, lotAtAdd: 'lot', variant: { isActive: true, stockQty: 2, price: 2500, size: 'M', product: { id: 42, name: 'Prenda', isActive: true, currency: 'EUR', activeLotId: 'lot', price: 2500, inventoryLots: [], images: [{ url: 'https://example.test/photo.png', width: 400, height: 800 }] } } }] };
+    expect(purchasableReminderItems(cart)[0]).toMatchObject({ imageWidth: 70, imageHeight: 70, quantity: 2, imageUrl: 'https://cronox.es/api/email/order-product-image/cart/42.png?v=1' });
   });
 });

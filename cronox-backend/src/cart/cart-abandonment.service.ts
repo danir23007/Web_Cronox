@@ -1,4 +1,4 @@
-import { containedOrderImage } from '../email/managed/order-product-image';
+import { cartProductThumbnail } from '../email/managed/order-product-thumbnail';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,13 +28,7 @@ export function purchasableReminderItems(cart: CartWithItems, now = new Date()) 
     if (!v.isActive || !p.isActive || p.currency !== 'EUR' || v.stockQty <= 0 || item.qty <= 0 ||
         item.lotAtAdd !== p.activeLotId || !Number.isSafeInteger(price) || price < 0) return [];
     const quantity = Math.min(item.qty, v.stockQty);
-    const image = p.images[0]?.url || p.imageUrl;
-    let imageUrl = '';
-    if (image) {
-      const url = new URL(image, getFrontendUrl());
-      if (url.protocol === 'https:' || url.protocol === 'http:') imageUrl = url.href;
-    }
-    return [{ name: p.name, variantName: v.size, quantity, imageUrl, ...containedOrderImage(p.images[0]?.width, p.images[0]?.height),
+    return [{ name: p.name, variantName: v.size, quantity, ...cartProductThumbnail(p),
       unitPriceFormatted: money(price), lineTotalFormatted: money(price * quantity) }];
   });
 }
