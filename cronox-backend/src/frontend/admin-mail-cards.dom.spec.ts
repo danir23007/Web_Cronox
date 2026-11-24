@@ -56,6 +56,23 @@ async function workspace(options: { blocked?: boolean; fail?: boolean; total?: n
 }
 
 describe('manual template classification and safe card deletion', () => {
+  it('sizes the preview to content, shrinks short messages and refits when images load without draft writes', async () => {
+    const t = await workspace();
+    await t.click('[data-mail-action="edit"][data-id="t0"]');
+    await t.click('[data-mail-action="view-preview"]');
+    const frame = t.win.document.querySelector('iframe');
+    frame.contentDocument.body.innerHTML = '<table><tr><td><img></td></tr></table>';
+    const table = frame.contentDocument.querySelector('table');
+    let bottom = 420;
+    table.getBoundingClientRect = () => ({ bottom });
+    frame.onload();
+    expect(frame.style.height).toBe('420px');
+    bottom = 180;
+    frame.contentDocument.querySelector('img').dispatchEvent(new t.win.Event('load'));
+    expect(frame.style.height).toBe('180px');
+    expect(t.writes()).toBe(0);
+    t.dom.window.close();
+  });
   it.each([false, true])('keeps unsaved edits and original variables across Edit/Preview without writes (HTML %s)', async htmlEmail => {
     const t = await workspace({ htmlEmail });
     await t.click('[data-mail-action="edit"][data-id="t0"]');

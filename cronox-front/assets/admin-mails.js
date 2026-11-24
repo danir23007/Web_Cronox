@@ -517,6 +517,31 @@
     clearTimeout(livePreviewTimer);
     livePreviewTimer = setTimeout(() => { if (state.current) hydrateDocumentView(); }, 250);
   }
+  function fitMailPreviewFrame(frame) {
+    const doc = frame.contentDocument;
+    if (!doc || !doc.body) return () => {};
+    // scrollHeight includes the existing viewport in some clients. Measure
+    // actual content instead, so a short message can also shrink the frame.
+    const fit = () => {
+      if (!frame.isConnected) return;
+      const bottom = Math.max(0, ...Array.from(doc.body.children).map(node => node.getBoundingClientRect().bottom + doc.defaultView.scrollY));
+      frame.style.height = Math.ceil(bottom) + 'px';
+    };
+    fit();
+    doc.querySelectorAll('img').forEach(image => {
+      image.addEventListener('load', fit);
+      image.addEventListener('error', fit);
+    });
+    if (typeof ResizeObserver !== 'undefined') {
+      if (frame.mailResizeObserver) frame.mailResizeObserver.disconnect();
+      const observer = new ResizeObserver(() => {
+        if (!frame.isConnected) observer.disconnect(); else fit();
+      });
+      observer.observe(doc.body);
+      frame.mailResizeObserver = observer;
+    }
+    return fit;
+  }
   function previewFrameSource(html) {
     const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
     // New email assets remain local until the approved deployment. The draft
@@ -617,8 +642,7 @@
         if (!doc) return;
         frame.style.pointerEvents = '';
         status.textContent = readyMessage;
-        const sizeFrame = () => { if (frame.isConnected) frame.style.height = Math.max(600, doc.body.scrollHeight + 24) + 'px'; };
-        sizeFrame();
+        const sizeFrame = fitMailPreviewFrame(frame);
         if (preview) return;
         doc.addEventListener('click', event => { if (event.target.closest('a')) event.preventDefault(); });
         const edits = new Map();
@@ -919,11 +943,12 @@
     const output = root.querySelector("#mailAdvancedOutput");
     if (showText) output.innerHTML = '<pre class="mail-source">' + esc(result.text) + "</pre>";
     else {
-      const csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src https:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">';
       output.innerHTML = '<iframe id="mailPreview" class="mail-preview ' +
         (state.mobile ? "is-mobile" : "") +
-        '" sandbox="" referrerpolicy="no-referrer" title="Vista previa aislada del correo"></iframe>';
-      output.querySelector("iframe").srcdoc = result.html.replace("<head>", "<head>" + csp);
+        '" sandbox="allow-same-origin" referrerpolicy="no-referrer" title="Vista previa aislada del correo"></iframe>';
+      const frame = output.querySelector("iframe");
+      frame.onload = () => fitMailPreviewFrame(frame);
+      frame.srcdoc = previewFrameSource(result.html);
     }
     message("Vista previa generada con datos ficticios.");
     return result;

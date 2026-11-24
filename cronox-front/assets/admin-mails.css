@@ -138,14 +138,14 @@
 .mail-document-stage { width: 100%; max-width: 700px; margin: auto; }
 .mail-document-stage.is-mobile { max-width: 399px; }
 #section-mails [hidden] { display: none !important; }
-.mail-document-stage .mail-html-email-preview { min-height: 600px; height: 1040px; max-width: 640px; }
+.mail-document-stage .mail-html-email-preview { min-height: 0; height: auto; max-width: 640px; }
 @media (max-width: 780px) { .mail-document-toolbar { gap: 8px; padding: 12px; } .mail-editor-tabs { width: 100%; } }
 .mail-builder.is-html-email { display: block; }
 .mail-html-workbench { min-width: 0; padding-bottom: 20px; }
 .mail-html-preview-note,.mail-html-preview-status,.mail-html-sample { display: block; margin: 16px; font-size: 12px; line-height: 1.6; color: var(--admin-c-495468, #b8c6da); }
 .mail-html-sample { max-width: 350px; }
 .mail-html-sample select { margin-top: 5px; }
-.mail-html-email-preview { display: block; width: calc(100% - 24px); max-width: 600px; height: 1040px; border: 1px solid var(--admin-border, #465269); margin: 20px auto; background: #aaa9a6; }
+.mail-html-email-preview { display: block; width: calc(100% - 24px); max-width: 600px; min-height: 0; height: auto; border: 1px solid var(--admin-border, #465269); margin: 20px auto; background: #aaa9a6; }
 .mail-html-email-preview.is-mobile { max-width: 375px; }
 .mail-html-source { margin: 16px; border: 1px solid var(--admin-border, #465269); border-radius: 8px; padding: 14px; }
 .mail-html-source summary { cursor: pointer; }
@@ -505,7 +505,7 @@ html[data-admin-theme] #section-mails .mail-delete-confirm,
 .mail-advanced summary { padding: 14px 16px; color: #aaaab1; cursor: pointer; }
 .mail-advanced-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; padding: 0 16px 16px; }
 .mail-source { margin: 0 16px 16px; padding: 16px; max-height: 420px; overflow: auto; border: 1px solid #292930; white-space: pre-wrap; }
-.mail-preview { display: block; width: calc(100% - 32px); max-width: 680px; height: 640px; margin: 0 auto 16px; border: 1px solid #444; background: #fff; }
+.mail-preview { display: block; width: calc(100% - 32px); max-width: 680px; min-height: 0; height: auto; margin: 0 auto 16px; border: 1px solid #444; background: #fff; }
 .mail-preview.is-mobile { max-width: 375px; }
 .mail-version-list { padding: 0 16px 16px; }
 .mail-version-list p { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid #292930; }

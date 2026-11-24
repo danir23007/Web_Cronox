@@ -51,6 +51,21 @@ describe('global email footer', () => {
     expect(parsed.querySelector('div')?.textContent).toBe('CRONOX');
     expect(second.text.match(/CRONOX · Contacto y preferencias/g)).toHaveLength(1);
   });
+  it('removes exclusive old-footer containers without touching the message or quoted signature', () => {
+    const old = dom(compose('<body><p>Antes</p></body>').html).querySelector('.cronox-global-footer')!.outerHTML;
+    const source = `<html><body><table><tr><td><p>Cuerpo conservado</p></td></tr><tr><td height="300" style="padding:40px;"><div style="min-height:250px">${old}</div></td></tr></table><blockquote>Firma de Ana</blockquote></body></html>`;
+    const result = compose(source);
+    const parsed = dom(result.html), footer = parsed.querySelector('.cronox-global-footer')!;
+    expect(parsed.querySelector('[height="300"]')).toBeNull();
+    expect(result.html).not.toContain('min-height:250px');
+    expect(parsed.querySelector('p')!.textContent).toBe('Cuerpo conservado');
+    expect(parsed.querySelector('blockquote')!.textContent).toBe('Firma de Ana');
+    expect(footer.parentElement!.tagName).toBe('BODY');
+    expect(parsed.querySelectorAll('.cronox-global-footer')).toHaveLength(1);
+    expect(footer.getAttribute('style')).toContain('height:auto!important');
+    expect([...footer.querySelectorAll('td')].every(td => td.getAttribute('valign') === 'top')).toBe(true);
+    expect(footer.querySelector('[height]')).toMatchObject({ tagName: 'IMG' });
+  });
   it('replaces only the known welcome contact row and preserves the tagline and message-specific support advice', () => {
     const source = '<html><body><h1>Bienvenido</h1><p>Para recuperar tu cuenta contacta con support@cronox.es.</p><img alt="La cara B del ser humano"><table><tr><td class="welcome-footer"><a href="https://www.instagram.com/cronox.es/">cronox.es</a> · <a href="mailto:support@cronox.es">support@cronox.es</a></td></tr></table></body></html>';
     const rendered = compose(source, 'NEWSLETTER_WELCOME');
@@ -74,7 +89,7 @@ describe('global email footer', () => {
       expect(image.parentElement?.getAttribute('style')).toContain('cursor:default');
     }
     expect(icons.every(image => image.getAttribute('width') === '20' && image.getAttribute('style')?.includes('padding:6px 0'))).toBe(true);
-    expect(footer.querySelector('td')?.getAttribute('style')).toContain('padding:12px 20px 4px');
+    expect(footer.querySelector('td')?.getAttribute('style')).toContain('padding:14px 20px 4px');
     expect(footer.querySelector('.cronox-footer-rule')?.closest('table')?.parentElement?.getAttribute('style')).toContain('padding:0 24px 8px');
     const rule = footer.querySelector('.cronox-footer-rule')!.closest('table')!;
     expect(rule.getAttribute('width')).toBe('210');
@@ -83,7 +98,7 @@ describe('global email footer', () => {
     expect(support.firstChild?.textContent).toBe('Si tienes cualquier problema o duda, escríbenos: ');
     expect(support.textContent).toBe('Si tienes cualquier problema o duda, escríbenos: support@cronox.es');
     expect(support.querySelector('br')).toBeNull();
-    expect(footer.querySelector('a[href="' + link + '"]')!.parentElement!.getAttribute('style')).toContain('padding:0 24px 6px');
+    expect(footer.querySelector('a[href="' + link + '"]')!.parentElement!.getAttribute('style')).toContain('padding:0 24px 5px');
     const configured = composeGlobalMailFooter('<body>Mensaje</body>', '', { preferenceUrl: link, socials: { tiktokUrl: 'https://www.tiktok.com/@cronox-fixture', youtubeUrl: 'https://www.youtube.com/@cronox-fixture' } });
     for (const name of ['TikTok', 'YouTube']) expect(dom(configured.html).querySelector(`img[alt="${name}"]`)?.closest('a')?.getAttribute('href')).toContain('cronox-fixture');
   });
