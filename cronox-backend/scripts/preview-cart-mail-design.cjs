@@ -6,7 +6,7 @@ require('ts-node/register/transpile-only');
 const { CART_COPY, cartAbandonedDocument } = require('../src/email/managed/cart-abandoned-design');
 const { ManagedMailService } = require('../src/email/managed/managed-mail.service');
 const { containedOrderImage } = require('../src/email/managed/order-product-image');
-const root = path.resolve(__dirname, '../..'), output = path.join(root, 'output/playwright/cart-mail-design');
+const root = path.resolve(__dirname, '../..'), output = path.join(root, 'output/playwright/cart-mail-square');
 async function main() {
   fs.mkdirSync(output, { recursive: true });
   const photos = [[400, 800, 'vertical'], [800, 400, 'horizontal'], [500, 500, 'cuadrada']];

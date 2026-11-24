@@ -259,6 +259,14 @@ async function main() {
       const selection = await previewCatalogProduct(db, undefined, undefined, 'CART_ABANDONED'); Object.assign(data, selection.data);
       const real = await managed.published('NOREPLY', 'CART_ABANDONED', data);
       assert.equal(preview.html, real.html); assert.equal(preview.subject, real.subject);
+      const doc = new (require('jsdom').JSDOM)(real.html).window.document;
+      const frame = doc.querySelector('.cart-mail-thumbnail'); assert.ok(frame);
+      assert.equal(frame.getAttribute('width'), '70'); assert.equal(frame.getAttribute('height'), '70');
+      assert.equal(frame.querySelector('td').getAttribute('bgcolor'), '#242428');
+      const support = doc.querySelector('a[href="mailto:support@cronox.es"]').parentElement;
+      assert.equal(support.textContent, 'Si tienes cualquier problema o duda, escríbenos: support@cronox.es');
+      assert.equal(support.querySelector('br'), null);
+      assert.ok(real.text.includes('Si tienes cualquier problema o duda, escríbenos: support@cronox.es'));
     }
     const versionCount = await db.emailTemplateVersion.count();
     const repeated = await publishCartMailDesign(db, true);

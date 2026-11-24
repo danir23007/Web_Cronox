@@ -32,6 +32,8 @@ describe('global email footer', () => {
     expect(footer.querySelector('a[href="mailto:support@cronox.es"]')).not.toBeNull();
     expect(footer.querySelector('svg,script')).toBeNull();
     expect(rendered.text).toContain('Todos los derechos reservados');
+    expect(footer.querySelector('a[href="mailto:support@cronox.es"]')!.parentElement!.textContent).toBe('Si tienes cualquier problema o duda, escríbenos: support@cronox.es');
+    expect(rendered.text).toContain('\nSi tienes cualquier problema o duda, escríbenos: support@cronox.es\n');
     expect(footer.querySelector(`a[href="${link}"]`)?.textContent).toBe('Actualiza tus preferencias');
     expect(rendered.text).toContain(`Actualiza tus preferencias: ${link}`);
     expect(rendered.html + rendered.text).not.toMatch(/Los correos necesarios de pedidos, seguridad y acceso seguirán enviándose|Gestionar mis preferencias comerciales|Darme de baja de comunicaciones comerciales/);
@@ -74,9 +76,13 @@ describe('global email footer', () => {
     expect(icons.every(image => image.getAttribute('width') === '20' && image.getAttribute('style')?.includes('padding:6px 0'))).toBe(true);
     expect(footer.querySelector('td')?.getAttribute('style')).toContain('padding:12px 20px 4px');
     expect(footer.querySelector('.cronox-footer-rule')?.closest('table')?.parentElement?.getAttribute('style')).toContain('padding:0 24px 8px');
+    const rule = footer.querySelector('.cronox-footer-rule')!.closest('table')!;
+    expect(rule.getAttribute('width')).toBe('210');
+    expect(rule.getAttribute('style')).toContain('max-width:210px');
     const support = footer.querySelector('a[href="mailto:support@cronox.es"]')!.parentElement!;
-    expect(support.firstElementChild?.textContent).toBe('support@cronox.es');
-    expect(support.textContent).toBe('support@cronox.esSi tienes cualquier problema o duda, escríbenos.');
+    expect(support.firstChild?.textContent).toBe('Si tienes cualquier problema o duda, escríbenos: ');
+    expect(support.textContent).toBe('Si tienes cualquier problema o duda, escríbenos: support@cronox.es');
+    expect(support.querySelector('br')).toBeNull();
     expect(footer.querySelector('a[href="' + link + '"]')!.parentElement!.getAttribute('style')).toContain('padding:0 24px 6px');
     const configured = composeGlobalMailFooter('<body>Mensaje</body>', '', { preferenceUrl: link, socials: { tiktokUrl: 'https://www.tiktok.com/@cronox-fixture', youtubeUrl: 'https://www.youtube.com/@cronox-fixture' } });
     for (const name of ['TikTok', 'YouTube']) expect(dom(configured.html).querySelector(`img[alt="${name}"]`)?.closest('a')?.getAttribute('href')).toContain('cronox-fixture');

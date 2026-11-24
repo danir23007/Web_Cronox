@@ -19,6 +19,16 @@ describe('approved abandoned basket design', () => {
     expect(content.html + content.text).not.toMatch(/carrito|Dejar de recibir|CRONOX · cronox.es|Firma que no debe/);
     const rows = [...doc.querySelectorAll('.cart-mail-product')]; expect(rows).toHaveLength(3);
     expect(rows.every(row => row.getAttribute('style')!.includes('background:transparent'))).toBe(true);
+    const frames = [...doc.querySelectorAll<HTMLTableElement>('.cart-mail-thumbnail')];
+    expect(frames).toHaveLength(3);
+    for (const frame of frames) {
+      expect([frame.width, frame.getAttribute('height')]).toEqual(['70', '70']);
+      expect(frame.style.width).toBe('70px'); expect(frame.style.height).toBe('70px');
+      const cell = frame.querySelector('td')!;
+      expect(cell.getAttribute('bgcolor')).toBe('#242428');
+      expect(cell.style.backgroundColor).toBe('rgb(36, 36, 40)');
+      expect(cell.getAttribute('align')).toBe('center'); expect(cell.getAttribute('valign')).toBe('middle');
+    }
     const images = rows.map(row => row.querySelector('img')!);
     expect(images.map(img => [img.getAttribute('width'), img.getAttribute('height')])).toEqual([['35', '70'], ['70', '35'], ['70', '70']]);
     expect(images.every(img => !img.getAttribute('style')!.includes('object-fit'))).toBe(true);

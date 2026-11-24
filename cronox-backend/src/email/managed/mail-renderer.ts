@@ -133,7 +133,7 @@ export function cleanMailHtml(html: string, placeholders = false) {
       table: ['cellpadding', 'cellspacing', 'border', 'width', 'role'],
       td: ['colspan', 'rowspan', 'background', 'bgcolor'],
     },
-    allowedClasses: { '*': ['cart-mail-product', 'cronox-global-footer', 'cronox-footer-light', 'cronox-footer-dark', 'cronox-footer-rule', 'restock-photos', 'mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame', 'order-shipped-actions', 'order-delivered-items', 'order-returned-content'] },
+    allowedClasses: { '*': ['cart-mail-product', 'cart-mail-thumbnail', 'cronox-global-footer', 'cronox-footer-light', 'cronox-footer-dark', 'cronox-footer-rule', 'restock-photos', 'mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame', 'order-shipped-actions', 'order-delivered-items', 'order-returned-content'] },
     allowedSchemes: ['https', 'http', 'mailto', 'tel'],
     allowProtocolRelative: false,
     allowedStyles: {

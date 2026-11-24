@@ -1,4 +1,5 @@
 import { simpleParser } from 'mailparser';
+import { JSDOM } from 'jsdom';
 import { MailboxSenderService } from '../mailbox/mailbox-sender.service';
 import { MailboxCampaignService } from '../mailbox/mailbox-campaign.service';
 import { MailTransportFactory } from './mail-transport.factory';
@@ -22,6 +23,12 @@ describe('global footer in the actual outgoing MIME paths', () => {
     expect(String(mime.html)).toContain(body);
     expect(String(mime.html).match(/data-cronox-global-footer="v1"/g)).toHaveLength(1);
     expect(mime.text).toContain('CRONOX · Contacto y preferencias');
+    const document = new JSDOM(String(mime.html)).window.document;
+    const support = document.querySelector('.cronox-global-footer a[href="mailto:support@cronox.es"]')!.parentElement!;
+    expect(support.textContent).toBe('Si tienes cualquier problema o duda, escríbenos: support@cronox.es');
+    expect(support.querySelector('br')).toBeNull();
+    expect(mime.text).toContain('Si tienes cualquier problema o duda, escríbenos: support@cronox.es');
+    expect(document.querySelector('.cronox-footer-rule')!.closest('table')!.getAttribute('width')).toBe('210');
     return mime;
   };
   const memory = () => {
