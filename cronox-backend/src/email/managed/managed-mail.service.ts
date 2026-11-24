@@ -1,3 +1,4 @@
+import { CART_COPY } from './cart-abandoned-design';
 import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
 import { CIRCLE_PROMOTION_PREHEADER, circlePromotionDocument } from './circle-promotion-design';
 import { mailPublicationKey, recipientMailCircle, snapshotMailCircle } from './mail-publication-scope';
@@ -207,7 +208,7 @@ export class ManagedMailService {
             if (isPromotion && await tx.managedEmailTemplate.findUnique({ where: { importKey } })) continue;
             const compatibleDocument = isPromotion ? json(circlePromotionDocument(circle))
               : legacy ? json(passwordSetupDesign(legacy.document, p.key)) : document;
-            const preheader = p.key === 'CIRCLE_PROMOTION' ? CIRCLE_PROMOTION_PREHEADER : '';
+            const preheader = p.key === 'CIRCLE_PROMOTION' ? CIRCLE_PROMOTION_PREHEADER : p.key === 'CART_ABANDONED' ? CART_COPY.preheader : '';
             const rendered = renderMail(compatibleDocument, p.subject, preheader, p.key);
             const template = await tx.managedEmailTemplate.upsert({
               where: { importKey },
@@ -221,7 +222,7 @@ export class ManagedMailService {
                 subject: p.subject,
                 preheader,
                 document: compatibleDocument,
-                ...(p.key === 'CART_ABANDONED' ? { signatureMode: 'default' } : {}),
+                ...(p.key === 'CART_ABANDONED' ? { signatureMode: 'none' } : {}),
                 html: rendered.html,
                 text: rendered.text,
                 createdBy: actorId,

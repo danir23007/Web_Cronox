@@ -20,6 +20,8 @@ const manifest = JSON.parse(
   read('docs/original-assets/ui-media/manifest.json'),
 );
 const approvedImageChanges = new Set([
+  // Approved basket icon for abandoned-basket mail, generated as email-safe PNG.
+  'cronox-front/assets/mail/global-footer/basket-dark.png',
   'cronox-front/assets/CRONOX-preloader.webp',
   // Responsive derivatives requested by the performance review; original retained.
   'cronox-front/assets/CRONOX-preloader-320.webp',

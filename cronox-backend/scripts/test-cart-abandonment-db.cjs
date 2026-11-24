@@ -231,19 +231,39 @@ async function main() {
     await assert.rejects(service.prepareAbandonedCart('fixture@example.test', sample), /PUBLICATION_REQUIRED/);
     const folder = await db.emailTemplateFolder.findUnique({ where: { id: t.folderId } });
     const circle = Number(folder.name.match(/[1-5]/)[0]); sample.circleLevel = circle;
-    assert.ok((await managed.preview('NOREPLY', { ...t, view: 'preview' })).html.includes('Recuperar mi carrito'));
+    assert.ok((await managed.preview('NOREPLY', { ...t, view: 'preview' })).html.includes('VOLVER A MI CESTA'));
     assert.ok((await managed.preview('NOREPLY', { ...t, view: 'edit' })).bindings);
     await managed.action('NOREPLY', t.id, { action: 'publish', revision: t.revision, confirmed: true });
     const rendered = await service.prepareAbandonedCart('fixture@example.test', sample);
-    assert.ok(rendered.html.includes('Recuperar mi carrito')); assert.ok(rendered.html.includes('Fixture'));
+    assert.ok(rendered.html.includes('VOLVER A MI CESTA')); assert.ok(rendered.html.includes('Fixture'));
     assert.equal((rendered.html.match(/data-cronox-global-footer="v1"/g) || []).length, 1);
-    assert.ok(rendered.html.includes('actualiza tus preferencias')); assert.ok(!rendered.html.includes(sample.unsubscribeUrl));
+    assert.ok(rendered.html.includes('Actualiza tus preferencias')); assert.ok(!rendered.html.includes(sample.unsubscribeUrl));
     assert.ok(!rendered.text.includes(sample.unsubscribeUrl));
     const currentTemplate = await db.managedEmailTemplate.findUnique({ where: { id: t.id } });
     await managed.save('NOREPLY', { ...currentTemplate, subject: 'Borrador posterior', signatureId: undefined, visualClassification: undefined }, undefined, t.id);
     assert.equal((await service.prepareAbandonedCart('fixture@example.test', sample)).subject, rendered.subject);
     await managed.initialize('NOREPLY'); assert.equal(await db.managedEmailTemplate.count({ where: { purpose: 'CART_ABANDONED' } }), 5);
     report.checks.push('Five circle drafts initialize without publication; only published versions render; products, CTA, logo, shared signature slot and unsubscribe retained; initialization is idempotent');
+    const { publishCartMailDesign } = require('../src/email/managed/cart-abandoned-release');
+    await db.managedEmailTemplate.updateMany({ where: { purpose: 'CART_ABANDONED' }, data: { name: 'Carrito abandonado', subject: 'Contenido antiguo', textOverride: 'Texto antiguo', signatureMode: 'default' } });
+    const contentRelease = await publishCartMailDesign(db, true);
+    assert.equal(contentRelease.templates.length, 5); assert.equal(contentRelease.otherPurposesUnchanged, true);
+    assert.ok(contentRelease.templates.every(t => t.published && t.changed));
+    const { mailPreviewData } = require('../src/email/managed/welcome-design');
+    const { previewCatalogProduct } = require('../src/email/managed/mail-preview-product');
+    for (const released of contentRelease.templates) {
+      const stored = await db.managedEmailTemplate.findUniqueOrThrow({ where: { id: released.templateId } });
+      const preview = await managed.preview('NOREPLY', { ...stored, view: 'preview' });
+      const data = mailPreviewData('CART_ABANDONED', released.circle);
+      data.circleLevel = released.circle;
+      const selection = await previewCatalogProduct(db, undefined, undefined, 'CART_ABANDONED'); Object.assign(data, selection.data);
+      const real = await managed.published('NOREPLY', 'CART_ABANDONED', data);
+      assert.equal(preview.html, real.html); assert.equal(preview.subject, real.subject);
+    }
+    const versionCount = await db.emailTemplateVersion.count();
+    const repeated = await publishCartMailDesign(db, true);
+    assert.ok(repeated.templates.every(t => !t.changed)); assert.equal(await db.emailTemplateVersion.count(), versionCount);
+    report.checks.push('Persisted legacy cart drafts updated and published for I-V through normal save/CAS/version/audit; all other drafts, versions and publications unchanged; repeat is idempotent; SMTP forbidden');
   } finally {
     Date.now = realNow;
     if (db) await db.$disconnect(); if (other) await other.$disconnect();

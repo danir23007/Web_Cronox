@@ -1,3 +1,4 @@
+import { cartAbandonedDocument } from './cart-abandoned-design';
 import type { MailBlock, MailDocument } from './mail-renderer';
 import { prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { NOREPLY_HEADER_PURPOSES, withMailLogoHeader } from './mail-logo-header';
@@ -357,17 +358,7 @@ export function structuredDocumentForPurpose(
       ])];
       break;
     case 'CART_ABANDONED':
-      blocks = [section([
-        heading('Tu carrito sigue aquí'),
-        text('Dejaste estas prendas en tu carrito. Puedes volver cuando quieras y revisar tu selección.'),
-        dynamic('orderItems', { empty: 'No hay artículos comprables.' }),
-        button('Recuperar mi carrito', '{{actionUrl}}'),
-        text('Los precios y la disponibilidad se revisarán al continuar. Este correo no reserva productos.'),
-        button('Dejar de recibir comunicaciones comerciales', '{{unsubscribeUrl}}', { size: 11 }),
-        text('CRONOX · cronox.es', { size: 12, color: '#929292' }),
-        { type: 'signature' },
-      ])];
-      break;
+      return cartAbandonedDocument();
     case 'RESTOCK':
       blocks = [section([
         heading('Tu producto con alerta ya está disponible de nuevo'), text('{{product}} · Talla {{size}}'),

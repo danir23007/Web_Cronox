@@ -1,3 +1,4 @@
+import { containedOrderImage } from '../email/managed/order-product-image';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,7 +34,7 @@ export function purchasableReminderItems(cart: CartWithItems, now = new Date()) 
       const url = new URL(image, getFrontendUrl());
       if (url.protocol === 'https:' || url.protocol === 'http:') imageUrl = url.href;
     }
-    return [{ name: p.name, variantName: v.size, quantity, imageUrl,
+    return [{ name: p.name, variantName: v.size, quantity, imageUrl, ...containedOrderImage(p.images[0]?.width, p.images[0]?.height),
       unitPriceFormatted: money(price), lineTotalFormatted: money(price * quantity) }];
   });
 }

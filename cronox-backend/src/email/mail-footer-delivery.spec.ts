@@ -69,7 +69,7 @@ describe('global footer in the actual outgoing MIME paths', () => {
     jest.spyOn(service as any, 'eligible').mockResolvedValue(true); jest.spyOn(service, 'finish').mockResolvedValue();
     await service.tick(); expect(smtp.sendMail).toHaveBeenCalledTimes(1);
     const mime = await check(smtp.sendMail.mock.calls[0][0].raw, 'Campaña congelada');
-    expect(mime.text).toContain('actualiza tus preferencias');
+    expect(mime.text).toContain('Actualiza tus preferencias');
     expect(mime.headerLines.some(header => header.key === 'list-unsubscribe')).toBe(true); expect(JSON.stringify(snapshot)).toBe(original);
   });
 

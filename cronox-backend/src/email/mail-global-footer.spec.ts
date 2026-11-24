@@ -32,8 +32,8 @@ describe('global email footer', () => {
     expect(footer.querySelector('a[href="mailto:support@cronox.es"]')).not.toBeNull();
     expect(footer.querySelector('svg,script')).toBeNull();
     expect(rendered.text).toContain('Todos los derechos reservados');
-    expect(footer.querySelector(`a[href="${link}"]`)?.textContent).toBe('actualiza tus preferencias');
-    expect(rendered.text).toContain(`actualiza tus preferencias: ${link}`);
+    expect(footer.querySelector(`a[href="${link}"]`)?.textContent).toBe('Actualiza tus preferencias');
+    expect(rendered.text).toContain(`Actualiza tus preferencias: ${link}`);
     expect(rendered.html + rendered.text).not.toMatch(/Los correos necesarios de pedidos, seguridad y acceso seguirán enviándose|Gestionar mis preferencias comerciales|Darme de baja de comunicaciones comerciales/);
   });
 
@@ -71,9 +71,13 @@ describe('global email footer', () => {
       expect(image.closest('a,button,[onclick],[tabindex]')).toBeNull();
       expect(image.parentElement?.getAttribute('style')).toContain('cursor:default');
     }
-    expect(icons.every(image => image.getAttribute('width') === '20' && image.getAttribute('style')?.includes('padding:6px 12px'))).toBe(true);
+    expect(icons.every(image => image.getAttribute('width') === '20' && image.getAttribute('style')?.includes('padding:6px 0'))).toBe(true);
     expect(footer.querySelector('td')?.getAttribute('style')).toContain('padding:12px 20px 4px');
     expect(footer.querySelector('.cronox-footer-rule')?.closest('table')?.parentElement?.getAttribute('style')).toContain('padding:0 24px 8px');
+    const support = footer.querySelector('a[href="mailto:support@cronox.es"]')!.parentElement!;
+    expect(support.firstElementChild?.textContent).toBe('support@cronox.es');
+    expect(support.textContent).toBe('support@cronox.esSi tienes cualquier problema o duda, escríbenos.');
+    expect(footer.querySelector('a[href="' + link + '"]')!.parentElement!.getAttribute('style')).toContain('padding:0 24px 6px');
     const configured = composeGlobalMailFooter('<body>Mensaje</body>', '', { preferenceUrl: link, socials: { tiktokUrl: 'https://www.tiktok.com/@cronox-fixture', youtubeUrl: 'https://www.youtube.com/@cronox-fixture' } });
     for (const name of ['TikTok', 'YouTube']) expect(dom(configured.html).querySelector(`img[alt="${name}"]`)?.closest('a')?.getAttribute('href')).toContain('cronox-fixture');
   });

@@ -1,3 +1,4 @@
+import { cartItemsHtml } from './cart-abandoned-design';
 import { requireWelcomeCode } from './welcome-code';
 import { BadRequestException } from '@nestjs/common';
 import Handlebars from 'handlebars';
@@ -131,14 +132,14 @@ export function cleanMailHtml(html: string, placeholders = false) {
       table: ['cellpadding', 'cellspacing', 'border', 'width', 'role'],
       td: ['colspan', 'rowspan', 'background', 'bgcolor'],
     },
-    allowedClasses: { '*': ['cronox-global-footer', 'cronox-footer-light', 'cronox-footer-dark', 'cronox-footer-rule', 'restock-photos', 'mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame', 'order-shipped-actions', 'order-delivered-items', 'order-returned-content'] },
+    allowedClasses: { '*': ['cart-mail-product', 'cronox-global-footer', 'cronox-footer-light', 'cronox-footer-dark', 'cronox-footer-rule', 'restock-photos', 'mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame', 'order-shipped-actions', 'order-delivered-items', 'order-returned-content'] },
     allowedSchemes: ['https', 'http', 'mailto', 'tel'],
     allowProtocolRelative: false,
     allowedStyles: {
       '*': {
         color: [/^#[\da-f]{3,8}$/i],
         'background-color': [/^#[\da-f]{3,8}$/i],
-        background: [/^#[\da-f]{3,8}$/i],
+        background: [/^(?:#[\da-f]{3,8}|transparent)$/i],
         'background-image': [/^url\("https:\/\/[^"\s]+"\)$/i],
         'background-position': [/^(left|center|right) (top|center|bottom)$/],
         'background-size': [/^(cover|contain|auto)$/],
@@ -376,6 +377,7 @@ export function renderMail(
             break;
           }
           case 'orderItems':
+            if (purpose === 'CART_ABANDONED') { content = cartItemsHtml(); break; }
             content = `{{#each items}}<table role="presentation" width="100%"><tr><td width="84" valign="top" style="padding:10px 14px 10px 0;">{{#if imageUrl}}${['ORDER_CONFIRMATION', 'ORDER_SHIPPED'].includes(purpose || '') ? orderProductImageHtml() : '<img src="{{imageUrl}}" alt="{{name}}" width="70" height="70" style="display:block;width:70px;height:70px;border:1px solid #ddddda;border-radius:8px;" />'}{{/if}}</td><td valign="middle" style="padding:10px 8px;"><strong>{{name}}{{#if quantity}} × {{quantity}}{{/if}}</strong>{{#if variantName}}<br><span style="font-size:12px;color:#929292;">{{variantName}}</span>{{/if}}</td><td valign="middle" align="right" style="padding:10px 0;white-space:nowrap;"><strong>{{lineTotalFormatted}}</strong></td></tr></table>{{else}}<p>${label('empty', 'No hay artículos.')}</p>{{/each}}`;
             break;
           case 'orderTotals':
@@ -452,7 +454,7 @@ export function renderMail(
     throw new BadRequestException('Este diseño ya incluye su pie. Selecciona «Sin firma».');
   let body = imported ? cleanMailHtml(doc.blocks[0].html!, true) : renderBlocks(document);
   if (
-    signature &&
+    purpose !== 'CART_ABANDONED' && signature &&
     !(document as MailDocument).blocks.some((b) => b.type === 'signature')
   )
     body += renderBlocks(signature);

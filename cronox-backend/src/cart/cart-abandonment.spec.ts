@@ -63,8 +63,8 @@ describe('abandoned cart eligibility and delivery boundaries', () => {
     const data = { items: purchasableReminderItems(fixture()), actionUrl: 'https://example.test/cart', unsubscribeUrl: 'https://example.test/baja' };
     const signature = { blocks: [{ type: 'text', text: 'Firma compartida CRONOX' }] };
     const rendered = renderMail(document, 'Tu carrito', '', 'CART_ABANDONED', data, signature, true);
-    expect(rendered.html).toContain('Recuperar mi carrito'); expect(rendered.html).toContain(data.unsubscribeUrl);
-    expect(rendered.html).toContain('Firma compartida CRONOX'); expect(rendered.html).toContain('https://example.test/actual.png');
+    expect(rendered.html).toContain('VOLVER A MI CESTA'); expect(rendered.html).not.toContain(data.unsubscribeUrl);
+    expect(rendered.html).not.toContain('Firma compartida CRONOX'); expect(rendered.html).toContain('https://example.test/actual.png');
     expect(rendered.text).toContain('Camiseta');
     expect(() => renderMail({ blocks: [{ type: 'text', text: 'Sin datos' }] }, 'Carrito', '', 'CART_ABANDONED', data, undefined, true)).toThrow();
   });
@@ -95,7 +95,7 @@ describe('abandoned cart eligibility and delivery boundaries', () => {
     const publication = { ...rendered, ...composeGlobalMailFooter(rendered.html, rendered.text, { preferenceUrl: 'https://example.test/preferencias-correo' }) };
     expect(publication.html).not.toContain(data.unsubscribeUrl);
     expect(publication.text).not.toContain(data.unsubscribeUrl);
-    expect(publication.html).toContain('actualiza tus preferencias');
+    expect(publication.html).toContain('Actualiza tus preferencias');
     const email = new EmailService({} as any, { published: jest.fn().mockResolvedValue(publication) } as any);
     await expect(email.prepareAbandonedCart('fixture@example.test', data)).resolves.toEqual(publication);
   });
