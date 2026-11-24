@@ -59,7 +59,10 @@ export class EmailService {
   async prepareAbandonedCart(to: string, data: Record<string, unknown>) {
     // Respect publication state: a draft never becomes a production fallback.
     const published = await this.managed?.published(EmailSenderKey.NOREPLY, 'CART_ABANDONED', data);
-    const links = [data.actionUrl, data.unsubscribeUrl].map(value => String(value || ''));
+    // The global composer replaces the legacy opt-out CTA; the transport then
+    // supplies its recipient-specific preference link. Validate the cart CTA
+    // here, without requiring a legacy link that has deliberately been removed.
+    const links = [data.actionUrl].map(value => String(value || ''));
     const items = data.items as Array<Record<string, unknown>>;
     // Compare decoded DOM values. The shared sanitizer normalizes HTML entities
     // (including '=' in recovery queries and apostrophes in product names).

@@ -226,7 +226,7 @@ async function main() {
     assert.equal(templates.length, 5); assert.equal(await db.emailPublication.count({ where: { purpose: { startsWith: 'CART_ABANDONED' } } }), 0);
     const t = templates[0];
     const sample = { circleLevel: 1, items: [{ name: 'Fixture', variantName: 'M', quantity: 1, imageUrl: 'https://example.test/image.png', lineTotalFormatted: '45,00 €' }],
-      actionUrl: 'https://example.test/cart.html?recover=' + sentEpisode.id, unsubscribeUrl: 'https://example.test/unsubscribe' };
+      actionUrl: 'https://example.test/cart.html?recover=' + sentEpisode.id, unsubscribeUrl: 'https://example.test/api/mailbox-unsubscribe/local-fixture' };
     const service = new EmailService({}, managed);
     await assert.rejects(service.prepareAbandonedCart('fixture@example.test', sample), /PUBLICATION_REQUIRED/);
     const folder = await db.emailTemplateFolder.findUnique({ where: { id: t.folderId } });
@@ -235,7 +235,10 @@ async function main() {
     assert.ok((await managed.preview('NOREPLY', { ...t, view: 'edit' })).bindings);
     await managed.action('NOREPLY', t.id, { action: 'publish', revision: t.revision, confirmed: true });
     const rendered = await service.prepareAbandonedCart('fixture@example.test', sample);
-    assert.ok(rendered.html.includes('Recuperar mi carrito')); assert.ok(rendered.html.includes('Fixture')); assert.ok(rendered.html.includes(sample.unsubscribeUrl));
+    assert.ok(rendered.html.includes('Recuperar mi carrito')); assert.ok(rendered.html.includes('Fixture'));
+    assert.equal((rendered.html.match(/data-cronox-global-footer="v1"/g) || []).length, 1);
+    assert.ok(rendered.html.includes('actualiza tus preferencias')); assert.ok(!rendered.html.includes(sample.unsubscribeUrl));
+    assert.ok(!rendered.text.includes(sample.unsubscribeUrl));
     const currentTemplate = await db.managedEmailTemplate.findUnique({ where: { id: t.id } });
     await managed.save('NOREPLY', { ...currentTemplate, subject: 'Borrador posterior', signatureId: undefined, visualClassification: undefined }, undefined, t.id);
     assert.equal((await service.prepareAbandonedCart('fixture@example.test', sample)).subject, rendered.subject);

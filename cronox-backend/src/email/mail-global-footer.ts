@@ -118,6 +118,7 @@ export function composeGlobalMailFooter(html: string, text: string, context: Con
   const previous = text.lastIndexOf(FOOTER_TEXT_START);
   if (previous >= 0 && /© \d{4} CRONOX\. Todos los derechos reservados/.test(text.slice(previous))) text = text.slice(0, previous);
   text = text.replace(/\n*Recibes esta comunicación por tu suscripción a CRONOX\. Darme de baja: [^\s]+\s*$/, '');
+  text = text.replace(/^(?:Darme de baja|Dejar de recibir comunicaciones comerciales) \(https:\/\/[^\s)]*\/mailbox-unsubscribe\/[^\s)]+\)[^\S\r\n]*$/gm, '');
   text = text.replace(/\n+(?:CRONOX(?: · cronox\.es)?|© \d{4} CRONOX\.?(?: Todos los derechos reservados\.?)?)\s*$/, '');
   return { html, text: text.trimEnd() + FOOTER_TEXT_START + social.map(s => `${s.name}${s.url ? ': ' + s.url : ''}\n`).join('') +
     `Si tienes cualquier problema o duda, escríbenos a support@cronox.es (mailto:support@cronox.es).\n© ${year} CRONOX. Todos los derechos reservados\n${label}: ${context.preferenceUrl}` };

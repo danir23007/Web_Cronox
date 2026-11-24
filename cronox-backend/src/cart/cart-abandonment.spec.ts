@@ -4,6 +4,7 @@ import { CartController } from './cart.controller';
 import { EmailService } from '../email/email.service';
 import { structuredDocumentForPurpose } from '../email/managed/mail-template-documents';
 import { renderMail } from '../email/managed/mail-renderer';
+import { composeGlobalMailFooter } from '../email/mail-global-footer';
 
 describe('abandoned cart eligibility and delivery boundaries', () => {
   const environment = { ...process.env };
@@ -84,6 +85,17 @@ describe('abandoned cart eligibility and delivery boundaries', () => {
     const items = purchasableReminderItems(fixture()); items[0].name = "Camiseta d'Alex & CRONOX";
     const data = { items, circleLevel: 1, actionUrl: 'https://example.test/cart.html?recover=opaque&view=cart', unsubscribeUrl: 'https://example.test/baja/token' };
     const publication = renderMail(document, 'Tu carrito', '', 'CART_ABANDONED', data, undefined, true);
+    const email = new EmailService({} as any, { published: jest.fn().mockResolvedValue(publication) } as any);
+    await expect(email.prepareAbandonedCart('fixture@example.test', data)).resolves.toEqual(publication);
+  });
+  it('prepares a published cart after the shared footer replaces its legacy opt-out link', async () => {
+    const data = { items: purchasableReminderItems(fixture()), circleLevel: 1,
+      actionUrl: 'https://example.test/cesta?recover=opaque', unsubscribeUrl: 'https://example.test/api/mailbox-unsubscribe/local-fixture' };
+    const rendered = renderMail(structuredDocumentForPurpose('CART_ABANDONED')!, 'Tu carrito', '', 'CART_ABANDONED', data, undefined, true);
+    const publication = { ...rendered, ...composeGlobalMailFooter(rendered.html, rendered.text, { preferenceUrl: 'https://example.test/preferencias-correo' }) };
+    expect(publication.html).not.toContain(data.unsubscribeUrl);
+    expect(publication.text).not.toContain(data.unsubscribeUrl);
+    expect(publication.html).toContain('actualiza tus preferencias');
     const email = new EmailService({} as any, { published: jest.fn().mockResolvedValue(publication) } as any);
     await expect(email.prepareAbandonedCart('fixture@example.test', data)).resolves.toEqual(publication);
   });
