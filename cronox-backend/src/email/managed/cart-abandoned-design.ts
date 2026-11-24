@@ -23,7 +23,7 @@ export function cartAbandonedDocument(existing?: MailDocument): MailDocument & {
     header ? structuredClone(header) : { type: 'image', src: MAIL_LOGO_WHITE, alt: 'CRONOX', width: 148, padding: 10, background },
     { ...base, type: 'heading', text: CART_COPY.title, size: 26, weight: 700, lineHeight: 1.2 },
     { ...base, type: 'text', text: CART_COPY.message, size: 14 },
-    { ...base, type: 'html', paddingBottom: 2, html: `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="28" valign="middle"><img src="https://cronox.es/assets/mail/global-footer/basket-dark.png" width="18" height="18" alt="Cesta" style="display:block;border:0;"></td><td valign="middle" style="font-size:17px;font-weight:700;color:#eeeeee;">${CART_COPY.selection}</td></tr></table>` },
+    { ...base, type: 'text', cartSelection: true, text: CART_COPY.selection, size: 17, weight: 700, paddingBottom: 2 },
     { ...base, type: 'orderItems', size: 14, paddingTop: 0, labels: { empty: 'No hay prendas disponibles.' } },
     { ...base, type: 'button', text: CART_COPY.action, url: '{{actionUrl}}', size: 13, weight: 700, padding: 14, buttonColor: '#111111', buttonBackground: '#ffffff', borderRadius: 2 },
     { ...base, type: 'text', text: CART_COPY.note, size: 11, color: '#b7b7bb', paddingBottom: 0 },

@@ -16,6 +16,7 @@ import { prepareRestockDocument, RESTOCK_PHOTOS_HTML } from './restock-photos';
 import { prepareOrderConfirmationDocument, ORDER_CONFIRMATION_CSS, orderLogoHtml, ORDER_LOGO_LIGHT, mutedTaxColor, orderCanvas, orderCircle } from './order-confirmation-design';
 
 export type MailBlock = {
+  cartSelection?: boolean;
   adaptiveOrderLogo?: boolean;
   orderHeader?: boolean;
   orderActions?: boolean;
@@ -354,6 +355,7 @@ export function renderMail(
             break;
           case 'text':
             content = escape(b.text).replace(/\n/g, '<br>');
+            if (purpose === 'CART_ABANDONED' && b.cartSelection === true) content = `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="28" valign="middle"><img src="https://cronox.es/assets/mail/global-footer/basket-dark.png" width="18" height="18" alt="Cesta" style="display:block;border:0;"></td><td valign="middle" style="font-size:17px;font-weight:700;color:#eeeeee;">${content}</td></tr></table>`;
             break;
           case 'rich':
           case 'html':
