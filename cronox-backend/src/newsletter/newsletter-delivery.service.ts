@@ -196,10 +196,11 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
     } catch (error) {
       const uncertain = Boolean((error as { deliveryUnknown?: boolean }).deliveryUnknown);
       const waiting = quotaWaiting(error);
-      const retry = waiting || (!uncertain && job.attempts < MAX_ATTEMPTS);
+      const suppressed = Boolean((error as { deliverySuppressed?: boolean }).deliverySuppressed);
+      const retry = !suppressed && (waiting || (!uncertain && job.attempts < MAX_ATTEMPTS));
       await this.prisma.newsletterMailJob.updateMany({ where, data: {
         status: retry ? 'QUEUED' : uncertain ? 'UNCERTAIN' : 'FAILED',
-        errorCode: waiting ? 'EMAIL_QUOTA_WAITING' : retry ? 'RETRY_SAFE' : uncertain ? 'SMTP_OUTCOME_UNKNOWN' : 'SMTP_REJECTED',
+        errorCode: suppressed ? 'COMMERCIAL_MAIL_SUPPRESSED' : waiting ? 'EMAIL_QUOTA_WAITING' : retry ? 'RETRY_SAFE' : uncertain ? 'SMTP_OUTCOME_UNKNOWN' : 'SMTP_REJECTED',
         readyAt: waiting ? error.retryAt : retry ? new Date(Date.now() + job.attempts * 5 * 60_000) : job.readyAt,
         ...(waiting ? { attempts: { decrement: 1 } } : {}),
         claimToken: null, claimedAt: null,

@@ -2,6 +2,7 @@ import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
 import { CIRCLE_PROMOTION_PREHEADER, circlePromotionDocument } from './circle-promotion-design';
 import { mailPublicationKey, recipientMailCircle, snapshotMailCircle } from './mail-publication-scope';
 import { withMailLogoHeader } from './mail-logo-header';
+import { composeApplicationMail } from '../mail-footer-composition';
 import { MAIL_PURPOSE_HELP } from './mail-purpose-help';
 import { orderCircle, prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { previewCatalogProduct, usesPreviewProduct } from './mail-preview-product';
@@ -220,6 +221,7 @@ export class ManagedMailService {
                 subject: p.subject,
                 preheader,
                 document: compatibleDocument,
+                ...(p.key === 'CART_ABANDONED' ? { signatureMode: 'default' } : {}),
                 html: rendered.html,
                 text: rendered.text,
                 createdBy: actorId,
@@ -671,7 +673,7 @@ export class ManagedMailService {
         ? Handlebars.compile(t.textOverride, { noEscape: true })(data)
         : t.textOverride;
     }
-    return result;
+    return { ...result, ...await composeApplicationMail(tx, result, { purpose: t.purpose, preview: true }) };
   }
   private validateClassification(value: unknown) {
     if (value !== undefined && !['FOR_ALL', 'UNIQUE', 'DIFFERENT'].includes(value as string))
@@ -1278,7 +1280,8 @@ export class ManagedMailService {
           text: rendered.text,
         },
         'ADMIN_TEST',
-        ...(controlled ? [Date.now() + 60000] : []),
+        controlled ? Date.now() + 60000 : undefined,
+        t.purpose || undefined,
       )) as { messageId: string; accepted?: unknown[]; queued?: boolean };
       if (controlled && (!info.messageId || info.queued || info.accepted?.length !== 1 || String(info.accepted[0]).toLowerCase() !== to.toLowerCase()))
         throw new Error('CONTROLLED_WELCOME_SMTP_ACCEPTANCE_UNVERIFIED');

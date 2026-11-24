@@ -6,6 +6,7 @@ export enum EmailSenderKey {
 }
 
 export enum EmailTemplate {
+  CART_ABANDONED = 'CART_ABANDONED',
   CIRCLE_PROMOTION = 'CIRCLE_PROMOTION',
   ORDER_RETURNED = 'ORDER_RETURNED',
   ORDER_LOGISTICS = 'ORDER_LOGISTICS',
@@ -24,6 +25,7 @@ export enum EmailTemplate {
 }
 
 export enum EmailType {
+  CART_ABANDONED = 'CART_ABANDONED',
   CIRCLE_PROMOTION = 'CIRCLE_PROMOTION',
   ORDER_OUT_FOR_DELIVERY = 'ORDER_OUT_FOR_DELIVERY',
   ORDER_INCIDENT = 'ORDER_INCIDENT',
@@ -110,6 +112,7 @@ export interface EmailConfig {
 }
 
 export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
+  [EmailType.CART_ABANDONED]: EmailSenderKey.NOREPLY,
   [EmailType.ORDER_OUT_FOR_DELIVERY]: EmailSenderKey.ORDERS,
   [EmailType.ORDER_INCIDENT]: EmailSenderKey.ORDERS,
   [EmailType.ORDER_RETURNED]: EmailSenderKey.ORDERS,
@@ -128,6 +131,7 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
 };
 
 export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
+  [EmailType.CART_ABANDONED]: EmailTemplate.CART_ABANDONED,
   [EmailType.ORDER_OUT_FOR_DELIVERY]: EmailTemplate.ORDER_LOGISTICS,
   [EmailType.ORDER_INCIDENT]: EmailTemplate.ORDER_LOGISTICS,
   [EmailType.ORDER_RETURNED]: EmailTemplate.ORDER_RETURNED,
@@ -147,6 +151,7 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 };
 
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
+  [EmailTemplate.CART_ABANDONED]: 'cart-abandoned.hbs',
   [EmailTemplate.CIRCLE_PROMOTION]: 'circle-promotion.hbs',
   [EmailTemplate.ORDER_RETURNED]: 'order-returned.hbs',
   [EmailTemplate.ORDER_LOGISTICS]: 'order-logistics.hbs',

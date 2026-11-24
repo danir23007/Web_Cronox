@@ -7,6 +7,11 @@ export interface MailPurposeHelp {
 }
 
 export const MAIL_PURPOSE_HELP: Record<string, MailPurposeHelp> = {
+  CART_ABANDONED: {
+    description: 'Recuerda una cesta de una cuenta identificada con consentimiento comercial vigente.',
+    delivery: 'Automático al habilitar el trabajador y su fecha de inicio; revisión cada 10 segundos.',
+    trigger: '23 horas desde la última actividad real: cambios, combinación al iniciar sesión o apertura explícita de la cesta. Las lecturas automáticas no cuentan. No se envía mientras exista una compra o pago sin conciliar. Un resultado SMTP incierto requiere revisión y no se reintenta.',
+  },
   CIRCLE_PROMOTION: {
     description: 'Confirma la nueva membresía, muestra las ventajas desbloqueadas y enlaza a la acreditación de la cuenta.',
     delivery: 'Automático desde No-reply.',

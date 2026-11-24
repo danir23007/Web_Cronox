@@ -668,6 +668,8 @@ export class OrdersService {
           const expiresAt = new Date(Date.now() + CHECKOUT_PRESENCE_MS);
           await tx.checkoutPresence.upsert({ where: key, create: { cartId: preview.cart.id, tabId: options.enterTabId, expiresAt }, update: { expiresAt } });
         }
+        // Coordinate checkout admission with cart edits and the final reminder check.
+        await tx.$queryRaw`SELECT id FROM "Cart" WHERE id=${preview.cart.id} FOR UPDATE`;
         const currentCart = await tx.cart.findUnique({
           where: { id: preview.cart.id },
           select: { userId: true, anonymousId: true, updatedAt: true },

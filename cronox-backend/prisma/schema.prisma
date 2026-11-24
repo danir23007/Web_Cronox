@@ -1014,6 +1014,7 @@ model NewsletterSettings {
 }
 
 model User {
+  cartAbandonments CartAbandonment[]
   welcomeBenefit AccountWelcomeBenefit?
   qrEventGroups QrEventGroup[] @relation("QrEventCreator")
   qrEventParticipants QrEventParticipant[] @relation("QrEventMember")
@@ -1386,6 +1387,7 @@ model Address {
 }
 
 model Cart {
+  abandonments CartAbandonment[]
   id          Int        @id @default(autoincrement())
   userId      Int?       @unique
   anonymousId String?    @unique
@@ -2500,4 +2502,24 @@ model InventoryPointCostRevision {
   after Json
   createdAt DateTime @default(now())
   @@unique([entryId, lineIndex, revision])
+}
+
+// Durable reminder episodes. Partial uniqueness / timing constraints live in SQL.
+model CartAbandonment {
+  id String @id
+  cartId Int
+  userId Int
+  activityAt DateTime @db.Timestamptz(3)
+  dueAt DateTime @db.Timestamptz(3)
+  readyAt DateTime @db.Timestamptz(3)
+  status String @default("QUEUED")
+  attempts Int @default(0)
+  claimedAt DateTime? @db.Timestamptz(3)
+  sentAt DateTime? @db.Timestamptz(3)
+  messageId String?
+  errorCode String?
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  @@index([status, readyAt], map: "CartAbandonment_due_idx")
+  @@index([cartId, activityAt], map: "CartAbandonment_cart_idx")
 }

@@ -47,10 +47,8 @@ describe('managed email safety and import', () => {
     };
     expect(
       (await service.render('INFO', template, { message: 'Actual data' })).text,
-    ).toBe('Plain Actual data');
-    expect((await service.render('INFO', template)).text).toBe(
-      'Plain {{message}}',
-    );
+    ).toMatch(/^Plain Actual data\n\nCRONOX/);
+    expect((await service.render('INFO', template)).text).toMatch(/^Plain \{\{message\}\}\n\nCRONOX/);
     await expect(
       service.render('INFO', {
         ...template,

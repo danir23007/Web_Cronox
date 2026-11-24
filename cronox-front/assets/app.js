@@ -2125,6 +2125,14 @@
     if (cartIcon) {
       cartIcon.addEventListener('click', (ev) => {
         ev.preventDefault();
+        if (ev.isTrusted && document.visibilityState === 'visible' && ['USER', 'FRIEND'].includes(window.CRONOX_USER?.role)) {
+          void (async () => {
+            await fetch((window.CRONOX_API.API_BASE || '') + '/api/cart/activity', {
+              method: 'POST', credentials: 'include', cache: 'no-store',
+              headers: await window.CRONOX_API.getCsrfHeaders(),
+            });
+          })().catch(() => {});
+        }
         openCartDrawer();
       });
     }

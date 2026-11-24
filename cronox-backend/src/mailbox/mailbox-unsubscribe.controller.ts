@@ -20,7 +20,7 @@ export class MailboxUnsubscribeController {
       .status(validToken ? 200 : 400)
       .type('html')
       .send(
-        `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Baja de CRONOX</title><link rel="preload" href="/assets/fonts/cormorant-garamond/cormorant-garamond-normal-latin-v21.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/assets/customer-typography.css?v=3"></head><body data-cronox-surface="customer">${validToken ? '<h1>Dejar de recibir campañas de CRONOX</h1><form data-mailbox-unsubscribe><button>Confirmar baja</button></form><p role="status"></p><script src="/assets/mailbox-unsubscribe.js" defer></script>' : '<h1>Enlace no válido.</h1>'}</body></html>`,
+        `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preferencias comerciales de CRONOX</title><link rel="preload" href="/assets/fonts/cormorant-garamond/cormorant-garamond-normal-latin-v21.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/assets/customer-typography.css?v=3"></head><body data-cronox-surface="customer">${validToken ? '<h1>Dejar de recibir comunicaciones comerciales de CRONOX</h1><p>Esta baja afecta a las comunicaciones comerciales. Seguirás recibiendo los correos necesarios de pedidos, seguridad y acceso.</p><form data-mailbox-unsubscribe><button>Confirmar baja comercial</button></form><p role="status"></p><script src="/assets/mailbox-unsubscribe.js?v=2" defer></script>' : '<h1>Enlace no válido.</h1>'}</body></html>`,
       );
   }
   @Post(':token')

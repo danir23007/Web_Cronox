@@ -22,11 +22,13 @@ import {
   circles,
   madridInstant,
 } from './mailbox-campaign-policy';
-import { decrypt, encrypt, header, maxMessageBytes } from './mailbox-security';
+import { header, maxMessageBytes } from './mailbox-security';
 import { campaignAudience, missingCampaignVariables } from './campaign-plan';
 import { effectiveMailHtml } from '../email/managed/mail-renderer';
 import { versionFingerprint } from './mailbox-retention.service';
 import { MailboxTrackingService } from './mailbox-tracking.service';
+import { composeApplicationMail } from '../email/mail-footer-composition';
+import { mailPreferenceToken, readMailPreferenceToken } from '../email/mail-preference-token';
 
 @Injectable()
 export class MailboxCampaignService {
@@ -347,7 +349,8 @@ export class MailboxCampaignService {
           );
           return null;
         }
-        const content = await this.templates.render('INFO', t, data, false, tx);
+        const rendered = await this.templates.render('INFO', t, data, false, tx);
+        const content = { ...rendered, ...await composeApplicationMail(tx, rendered, { purpose: 'CAMPAIGN', preview: true }) };
         assertResolved(content.subject, content.html, content.text);
         header(content.subject);
         if (!content.subject.trim() || !content.text.trim()) {
@@ -375,7 +378,7 @@ export class MailboxCampaignService {
       // Empty circles still need a structurally valid version; never invent customer data.
       if (!members.length) {
         await renderOne(null);
-        preview = source;
+        preview = { ...source, ...await composeApplicationMail(tx, source, { purpose: 'CAMPAIGN', preview: true }) };
       }
       previews.push({
         circle,
@@ -698,9 +701,7 @@ export class MailboxCampaignService {
     return this.view(actor, id);
   }
   unsubscribeToken(email: string) {
-    return Buffer.from(encrypt(email, 'mailbox-campaign-unsubscribe')).toString(
-      'base64url',
-    );
+    return mailPreferenceToken(email);
   }
   async suppress(actor: MailActor, email: string, reason: string) {
     this.access.superadmin(actor);
@@ -729,12 +730,7 @@ export class MailboxCampaignService {
       throw new BadRequestException('MAILBOX_INVALID_UNSUBSCRIBE');
     let email: string | null;
     try {
-      email = canonicalRecipient(
-        decrypt(
-          Buffer.from(token, 'base64url').toString(),
-          'mailbox-campaign-unsubscribe',
-        ),
-      );
+      email = canonicalRecipient(readMailPreferenceToken(token));
     } catch {
       throw new BadRequestException('MAILBOX_INVALID_UNSUBSCRIBE');
     }
@@ -751,7 +747,7 @@ export class MailboxCampaignService {
       });
     });
     return {
-      message: 'Baja registrada. No recibirás nuevas campañas por círculos.',
+      message: 'Baja comercial registrada. Seguirás recibiendo los correos necesarios de pedidos, seguridad y acceso.',
     };
   }
   async recover() {
@@ -974,12 +970,13 @@ export class MailboxCampaignService {
             header(content.subject);
             assertResolved(content.subject, content.text, content.html);
             const text = content.wireFrozen ? content.text.replaceAll('__CRONOX_UNSUBSCRIBE_URL__', link) : content.text + footer;
+            const globalContent = await composeApplicationMail(this.db, { html, text }, { purpose: 'CAMPAIGN', recipients: [delivery.email] });
             const composer = new MailComposer({
               from: { name: snapshot.fromName, address: box.address },
               bcc: [delivery.email],
               subject: content.subject,
-              text: this.tracking?.instrumentText(text, delivery.trackingToken) || text,
-              html: html ? this.tracking?.instrumentHtml(html, delivery.trackingToken) || html : undefined,
+              text: this.tracking?.instrumentText(globalContent.text, delivery.trackingToken) || globalContent.text,
+              html: this.tracking?.instrumentHtml(globalContent.html, delivery.trackingToken) || globalContent.html,
               messageId: delivery.messageId,
               attachments,
               headers: { 'List-Unsubscribe': `<${link}>` },

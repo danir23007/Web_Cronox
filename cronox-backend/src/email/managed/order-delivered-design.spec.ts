@@ -1,3 +1,4 @@
+import { removeKnownMailFooters } from '../mail-global-footer';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
@@ -36,7 +37,8 @@ describe('ORDER_DELIVERED existing circle designs',()=>{
    checkHtml(result!.html);
    expect(result!.html).toContain(['#101010','#202020','#303030','#404040','#b1001a'][circle-1]);
    expect(JSON.stringify(snapshot)).toBe(stored);
-   expect(renderMail(editableDraft(snapshot).document,snapshot.subject,'','ORDER_DELIVERED',data).html).toBe(result!.html);
+   expect(renderMail(editableDraft(snapshot).document,snapshot.subject,'','ORDER_DELIVERED',data).html).toBe(removeKnownMailFooters(result!.html));
+   expect(new JSDOM(result!.html).window.document.querySelectorAll('.cronox-global-footer')).toHaveLength(1);
  });
  function checkHtml(html:string){
    const d=new JSDOM(html).window.document,block=d.querySelector('.order-delivered-items')!;

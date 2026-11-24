@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Optional,
+  UnauthorizedException,
   Req,
   Res,
   UseGuards,
@@ -26,6 +27,7 @@ import {
 } from '../common/cookies/cart-cookie';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { CustomerActivityEventType } from '@prisma/client';
+import { CartAbandonmentService } from './cart-abandonment.service';
 
 interface ResolveContextOptions {
   ensureAnonymousId?: boolean;
@@ -41,7 +43,26 @@ export class CartController {
   constructor(
     private readonly cartService: CartService,
     @Optional() private readonly analytics?: AnalyticsService,
+    @Optional() private readonly abandonment?: CartAbandonmentService,
   ) {}
+
+  private identifiedUser(req: Request) {
+    const user = req.user as { id?: number; role?: string } | undefined;
+    if (!user?.id || !['USER', 'FRIEND'].includes(user.role || '')) throw new UnauthorizedException();
+    return user.id;
+  }
+
+  @Post('activity')
+  @Header('Cache-Control', 'private, no-store')
+  activity(@Req() req: Request) {
+    return this.abandonment!.activity(this.identifiedUser(req));
+  }
+
+  @Post('recover/:episode')
+  @Header('Cache-Control', 'private, no-store')
+  recover(@Req() req: Request, @Param('episode') episode: string) {
+    return this.abandonment!.recover(this.identifiedUser(req), episode);
+  }
 
   @Get()
   @Header('Cache-Control', 'private, no-store')

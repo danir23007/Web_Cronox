@@ -10,6 +10,8 @@ import { CIRCLE_PROMOTION_SUBJECT, circleBenefitFields } from './circle-promotio
 
 // Distinct purposes preserve the existing sender/transport types.
 export const MAIL_PURPOSES = [
+  { key: 'CART_ABANDONED', name: 'Carrito abandonado', type: EmailType.CART_ABANDONED,
+    subject: 'CRONOX · Tu carrito sigue aquí', required: ['items', 'actionUrl', 'unsubscribeUrl'] },
   { key: 'CIRCLE_PROMOTION', name: 'Ascenso de círculo', type: EmailType.CIRCLE_PROMOTION,
     subject: CIRCLE_PROMOTION_SUBJECT, required: ['circleRoman', 'accreditationColor', 'actionUrl'],
     circles: [2, 3, 4, 5] },
@@ -107,6 +109,7 @@ export const SAMPLE_DATA: Record<string, unknown> = {
   storeUrl: 'https://example.com',
   actionUrl: 'https://example.com/confirmar',
   recoveryUrl: 'https://example.com/recuperar-contrasena',
+  unsubscribeUrl: 'https://example.com/baja',
   actionLabel: 'Continuar',
   supportCaseId: 'SOP-PRUEBA',
   statusLabel: 'En camino',
@@ -143,6 +146,7 @@ export const SAMPLE_DATA: Record<string, unknown> = {
   ],
 };
 export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
+  unsubscribeUrl: 'Enlace seguro para darse de baja de comunicaciones comerciales',
   circleRoman: 'Círculo alcanzado por el cliente, en números romanos.',
   accreditationColor: 'Color de la nueva acreditación.',
   ...Object.fromEntries(circleBenefitFields.map((field, index) => [
@@ -228,6 +232,8 @@ export function variablesFor(purpose?: string | null) {
     case EmailType.ORDER_INCIDENT:
     case EmailType.ORDER_RETURNED:
       return [...base, ...order, 'trackingNumber', 'trackingUrl', 'shippingCarrier', 'statusLabel', ...(purpose === 'ORDER_RETURNED' ? ['returnReason'] : [])];
+    case EmailType.CART_ABANDONED:
+      return [...base, ...order, 'actionUrl', 'unsubscribeUrl'];
     case EmailType.RESTOCK:
       return [...base, 'product', 'size', 'imageUrl', 'actionUrl', 'restockPhoto1', 'restockPhoto2'];
     case EmailType.ORDER_CONFIRMATION:

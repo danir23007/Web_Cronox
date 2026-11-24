@@ -15,6 +15,7 @@ import { effectiveMailHtml } from '../email/managed/mail-renderer';
 import { appendSent, mailboxSenderKey } from './mailbox-sent-policy';
 import { MailboxRetentionService } from './mailbox-retention.service';
 import { quotaWaiting, recipientUnits, reserveAccountQuota } from '../email/mail-account-quota';
+import { assertCommercialMailAllowed, composeApplicationMail } from '../email/mail-footer-composition';
 
 export function smtpOutcome(error: any, attempted = true) {
   if (
@@ -117,23 +118,28 @@ export class MailboxSenderService {
             contentType: 'application/octet-stream',
           });
         }
+        let purpose = d.mode === 'reply' ? 'SUPPORT_REPLY' : mailboxSenderKey(b) === 'INFO' ? 'CAMPAIGN' : 'MANUAL';
         if (d.templateId) {
           const template = await this.db.managedEmailTemplate.findUnique({ where: { id: d.templateId } });
-          const purpose = MAIL_PURPOSES.find(p => p.key === template?.purpose);
-          if (!template || template.archivedAt || (template.purpose && !purpose) ||
-              (purpose && (template.senderKey !== purpose.senderKey ||
-                loadEmailConfig().accounts[purpose.senderKey].user.toLowerCase() !== b.address.toLowerCase()))) {
+          const catalogPurpose = MAIL_PURPOSES.find(p => p.key === template?.purpose);
+          if (!template || template.archivedAt || (template.purpose && !catalogPurpose) ||
+              (catalogPurpose && (template.senderKey !== catalogPurpose.senderKey ||
+                loadEmailConfig().accounts[catalogPurpose.senderKey].user.toLowerCase() !== b.address.toLowerCase()))) {
             throw Error('MAILBOX_TEMPLATE_NOT_AVAILABLE');
           }
+          purpose = template.purpose || purpose;
         }
+        await assertCommercialMailAllowed(this.db, purpose, [...to, ...cc, ...bcc]);
+        const content = await composeApplicationMail(this.db, { text: d.text, html: d.html ? effectiveMailHtml(d.html) : undefined },
+          { purpose, recipients: [...to, ...cc, ...bcc] });
         const composer = new MailComposer({
           from: { name: b.fromName, address: b.address },
           to,
           cc,
           bcc,
           subject: d.subject,
-          text: d.text,
-          html: d.html ? effectiveMailHtml(d.html) : undefined,
+          text: content.text,
+          html: content.html,
           messageId: pending.messageId,
           inReplyTo: d.inReplyTo || undefined,
           references: d.references,
@@ -166,6 +172,7 @@ export class MailboxSenderService {
               .active
           )
             throw Error('SENDING_DISABLED');
+          await assertCommercialMailAllowed(this.db, purpose, [...to, ...cc, ...bcc]);
           attempted = true;
           const info = await smtp.sendMail({
             raw: await this.files.read(rawKey),

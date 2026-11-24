@@ -13,8 +13,10 @@ export function restockDeliveryOutcome(
     command?: string;
     responseCode?: number;
     accepted?: unknown[];
+    deliverySuppressed?: boolean;
   };
   if (e?.accepted?.length) return 'UNCERTAIN';
+  if (e?.deliverySuppressed) return 'FAILED';
   // Never interpret a post-acceptance QUIT failure as a rejected message.
   const rejection =
     /^(CONN|EHLO|HELO|AUTH(?: .*?)?|MAIL FROM|RCPT TO|DATA)$/.test(

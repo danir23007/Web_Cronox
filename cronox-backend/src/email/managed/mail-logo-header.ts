@@ -6,7 +6,7 @@ import type { MailBlock, MailDocument } from './mail-renderer';
 export const APPROVED_WELCOME_TEMPLATE_ID = 'cmvf0j8780001l296e24fam0c';
 export const MAIL_LOGO_WHITE = 'https://cronox.es/assets/mail/order-confirmation/logo-dark.png';
 export const MAIL_LOGO_BLACK = 'https://cronox.es/assets/mail/order-confirmation/logo-light.png';
-export const NOREPLY_HEADER_PURPOSES = new Set(['PASSWORD_RESET', 'PASSWORD_SETUP_NEW_ACCOUNT', 'PASSWORD_SETUP_EXISTING_ACCOUNT', 'INITIAL_PASSWORD_SETUP', 'NEWSLETTER_ACCESS', 'NEWSLETTER_WELCOME', 'RESTOCK', 'TEST']);
+export const NOREPLY_HEADER_PURPOSES = new Set(['CART_ABANDONED', 'PASSWORD_RESET', 'PASSWORD_SETUP_NEW_ACCOUNT', 'PASSWORD_SETUP_EXISTING_ACCOUNT', 'INITIAL_PASSWORD_SETUP', 'NEWSLETTER_ACCESS', 'NEWSLETTER_WELCOME', 'RESTOCK', 'TEST']);
 const officialLogo = (src = '') => [MAIL_LOGO_WHITE, MAIL_LOGO_BLACK].includes(src);
 
 function lightSurface(background: string) {

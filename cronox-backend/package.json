@@ -25,6 +25,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+    "test:cart-abandonment:db": "node scripts/test-cart-abandonment-db.cjs",
     "test:manual-purchases:db": "node scripts/test-manual-purchases-db.cjs",
     "review:product-editions:integrated": "node scripts/review-product-editions-integrated.cjs",
     "test:product-editions:db": "node scripts/test-product-editions-db.cjs",

@@ -259,7 +259,7 @@ describe('email permissions, publication and controlled tests', () => {
       1,
     );
     expect(result.messageId).toBe('mock');
-    expect(transport.sendMail).toHaveBeenCalledWith(EmailSenderKey.NOREPLY, expect.any(Object), 'ADMIN_TEST');
+    expect(transport.sendMail).toHaveBeenCalledWith(EmailSenderKey.NOREPLY, expect.any(Object), 'ADMIN_TEST', undefined, 'NEWSLETTER_ACCESS');
     expect(sendMail).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(db.auditLog.create.mock.calls)).not.toContain(
       'alex@example.test',

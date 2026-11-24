@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;background:#111;color:#eee;font-family:Arial,sans-serif"><main style="max-width:640px;margin:auto;padding:24px">
+<h1>Tu carrito sigue aquí</h1><p>Dejaste estas prendas en tu carrito. Puedes volver cuando quieras y revisar tu selección.</p>
+{{#each items}}<table role="presentation" width="100%"><tr><td>{{#if imageUrl}}<img src="{{imageUrl}}" alt="{{name}}" width="70">{{/if}}</td><td>{{name}} · {{variantName}} × {{quantity}}</td><td>{{lineTotalFormatted}}</td></tr></table>{{/each}}
+<p><a href="{{actionUrl}}">Recuperar mi carrito</a></p><p>Los precios y la disponibilidad se revisarán al continuar. Este correo no reserva productos.</p>
+<p><a href="{{unsubscribeUrl}}">Dejar de recibir comunicaciones comerciales</a></p><p>CRONOX · cronox.es</p>
+</main></body></html>

@@ -260,6 +260,7 @@ export function sitemapXml(links: CatalogLink[]): string {
 }
 
 const isUtility = (path: string): boolean =>
+  path === '/preferencias-correo' || path === '/mail-preferences.html' ||
   /^(?:\/admin(?:[/.\-]|$)|\/docs(?:\/|$)|\/api(?:\/|$))/.test(path) ||
   [
     '/cuenta',

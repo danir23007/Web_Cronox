@@ -1,3 +1,4 @@
+import { composeApplicationMail } from '../email/mail-footer-composition';
 import {
   ForbiddenException,
   BadRequestException,
@@ -563,7 +564,8 @@ export class MailboxService {
     });
     return { ok: true };
   }
-  draftView(d: any) {
+  async draftView(d: any) {
+    const composed = await composeApplicationMail(this.db, d, { purpose: d.mode === 'circles' || d.mode === 'campaign' ? 'CAMPAIGN' : 'MANUAL', preview: true });
     return {
       id: d.id,
       mailboxId: d.mailboxId,
@@ -572,8 +574,8 @@ export class MailboxService {
       bcc: d.bcc,
       subject: d.subject,
       campaignName: d.campaignName,
-      text: d.text,
-      html: d.html,
+      text: composed.text,
+      html: composed.html,
       mode: d.mode,
       singleReply: d.mode === 'reply' || !!d.inReplyTo,
       circles: d.circles,

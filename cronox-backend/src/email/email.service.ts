@@ -14,6 +14,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import Handlebars from 'handlebars';
+import { parseDocument } from 'htmlparser2';
 import { renderMail } from './managed/mail-renderer';
 import { EXAMPLE_WELCOME_CODE, welcomeData, welcomeDocument, WELCOME_SUBJECT } from './managed/welcome-design';
 import { readFile } from 'fs/promises';
@@ -53,6 +54,41 @@ export class EmailService {
 
   isEnabled(): boolean {
     return this.config.enabled;
+  }
+
+  async prepareAbandonedCart(to: string, data: Record<string, unknown>) {
+    // Respect publication state: a draft never becomes a production fallback.
+    const published = await this.managed?.published(EmailSenderKey.NOREPLY, 'CART_ABANDONED', data);
+    const links = [data.actionUrl, data.unsubscribeUrl].map(value => String(value || ''));
+    const items = data.items as Array<Record<string, unknown>>;
+    // Compare decoded DOM values. The shared sanitizer normalizes HTML entities
+    // (including '=' in recovery queries and apostrophes in product names).
+    let plain = ''; const images: string[] = [];
+    const visit = (node: any) => {
+      if (node.type === 'text') plain += node.data;
+      if (node.name === 'img') images.push(node.attribs?.src);
+      node.children?.forEach(visit);
+    };
+    if (published) visit(parseDocument(published.html));
+    if (!published || links.some(link => !link || !hasReturnedTrackingLink(published.html, link)) ||
+        items.some(item => ['name', 'variantName', 'lineTotalFormatted'].some(key =>
+          !plain.includes(String(item[key]))) || item.imageUrl && !images.includes(String(item.imageUrl)))) {
+      throw Object.assign(Error('CART_ABANDONMENT_PUBLICATION_REQUIRED'), { reminderWait: true });
+    }
+    return published;
+  }
+
+  async sendAbandonedCart(to: string, prepared: { html: string; text: string; subject: string }, deadline: number) {
+    try {
+      const result = await this.transportFactory.sendMail(EmailSenderKey.NOREPLY, { to, ...prepared }, 'CART_ABANDONED', deadline);
+      if (result.queued || !result.accepted?.length) throw Object.assign(Error('CART_SMTP_ACCEPTANCE_UNKNOWN'), { deliveryUnknown: true });
+      return result;
+    } catch (error) {
+      // Transport records UNKNOWN for ambiguous SMTP outcomes. It has no provider
+      // idempotency API; only proven pre-delivery failures may be retried.
+      if (!(error as any).deliveryUnknown) Object.assign(error as object, { reminderRetrySafe: true });
+      throw error;
+    }
   }
 
   isLaunchSenderConfigured(): boolean {
@@ -214,6 +250,7 @@ export class EmailService {
       const failure = new InternalServerErrorException(
         'No se pudo enviar el email. Revisa la configuración SMTP.',
       );
+      if ((error as { deliverySuppressed?: boolean }).deliverySuppressed) Object.assign(failure, { deliverySuppressed: true });
       if ((error as { deliveryUnknown?: boolean }).deliveryUnknown) Object.assign(failure, { deliveryUnknown: true });
       throw failure;
     }

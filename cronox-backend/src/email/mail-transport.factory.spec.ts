@@ -41,7 +41,9 @@ describe('durable email delivery history', () => {
       expect(message.messageId).toBe(options.messageId);
       expect(message.headers.has('in-reply-to')).toBe(false);
       expect(message.headers.has('references')).toBe(false);
-      expect(message.html).toBe('<p>Independent welcome</p>');
+      expect(message.html).toContain('<p>Independent welcome</p>');
+      expect(String(message.html).match(/data-cronox-global-footer="v1"/g)).toHaveLength(1);
+      expect(message.text).toContain('actualiza tus preferencias');
       ids.push(message.messageId!);
       return { messageId: message.messageId, accepted: ['test@example.test'] };
     });

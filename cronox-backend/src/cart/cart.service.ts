@@ -1,3 +1,4 @@
+import { recordCartActivity } from './cart-abandonment-state';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { Request } from 'express';
@@ -217,7 +218,7 @@ export class CartService {
         });
       }
 
-      await this.recalcTotals(client, cart.id);
+      await this.recalcTotals(tx, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
     });
   }
@@ -245,13 +246,14 @@ export class CartService {
       const variant = await this.getVariantOrThrow(client, item.variantId);
       this.assertStock(dto.qty, await this.stockAvailableToCart(client, cart.id, variant.id, variant.stockQty ?? 0));
       const price = this.getVariantPriceOrThrow(variant);
+      if (item.qty === dto.qty && item.priceAtAdd === price && item.lotAtAdd === variant.product.activeLotId) return cart;
 
       await client.cartItem.update({
         where: { id: itemId },
         data: { qty: dto.qty, lotAtAdd: variant.product.activeLotId, priceAtAdd: price },
       });
 
-      await this.recalcTotals(client, cart.id);
+      await this.recalcTotals(tx, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
     });
   }
@@ -278,7 +280,7 @@ export class CartService {
       }
 
       await client.cartItem.delete({ where: { id: itemId } });
-      await this.recalcTotals(client, cart.id);
+      await this.recalcTotals(tx, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
     });
   }
@@ -290,7 +292,7 @@ export class CartService {
       const cart = await this.findOrCreate(where, tx);
 
       await client.cartItem.deleteMany({ where: { cartId: cart.id } });
-      await this.recalcTotals(client, cart.id);
+      await this.recalcTotals(tx, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
     });
   }
@@ -329,7 +331,7 @@ export class CartService {
           where: { id: anonCart.id },
           data: { userId, anonymousId: null },
         });
-        await this.recalcTotals(client, anonCart.id);
+        await this.recalcTotals(tx, anonCart.id);
         return { merged: true, incidents };
       }
 
@@ -416,7 +418,7 @@ export class CartService {
         SELECT ${userCart.id}, key, fingerprint, "createdAt" FROM "CartOperation" WHERE "cartId" = ${anonCart.id}
         ON CONFLICT ("cartId", key) DO NOTHING`;
       await client.cart.delete({ where: { id: anonCart.id } });
-      await this.recalcTotals(client, userCart.id);
+      await this.recalcTotals(tx, userCart.id, anonCart.items.length > 0);
 
       if (incidents.length > 0) {
         this.logger.warn(
@@ -588,7 +590,8 @@ export class CartService {
     }
   }
 
-  private async recalcTotals(client: ModelClient, cartId: number) {
+  private async recalcTotals(tx: Prisma.TransactionClient, cartId: number, activity = true) {
+    const client = this.getClient(tx);
     const items = await client.cartItem.findMany({
       where: { cartId },
     });
@@ -600,5 +603,6 @@ export class CartService {
       where: { id: cartId },
       data: { itemsCount, subtotal },
     });
+    if (activity) await recordCartActivity(tx, cartId);
   }
 }

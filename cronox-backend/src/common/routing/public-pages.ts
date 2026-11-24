@@ -17,12 +17,14 @@ export const CLEAN_PUBLIC_PAGES = new Map<string, string>([
   ['/desarrolla', 'develop.html'],
   ['/eventos', 'events.html'],
   ['/cuenta', 'profile.html'],
+  ['/preferencias-correo', 'mail-preferences.html'],
   ['/recuperar-contrasena', 'forgot-password.html'],
   ['/restablecer-contrasena', 'reset-password.html'],
 ]);
 
 export const LEGACY_PUBLIC_REDIRECTS = new Map<string, string>([
   ['/index.html', '/'],
+  ['/mail-preferences.html', '/preferencias-correo'],
   ['/key-screen', '/'],
   ['/key-screen.html', '/'],
   ['/gallery.html', '/galeria'],
@@ -48,6 +50,8 @@ export const LEGACY_PUBLIC_REDIRECTS = new Map<string, string>([
 ]);
 
 export const UNGATED_PUBLIC_PATHS = new Set([
+  '/preferencias-correo',
+  '/mail-preferences.html',
   '/privacidad',
   '/aviso-legal',
   '/cookies',

@@ -9,9 +9,10 @@ import { EmailService } from './email.service';
 import { OrderConfirmationEmailMapper } from './order-confirmation-email.mapper';
 import { OrderProductImageController } from './order-product-image.controller';
 import { RestockProductImageController } from './restock-product-image.controller';
+import { MailPreferencesController } from './mail-preferences.controller';
 
 @Module({
-  controllers: [EmailController, ManagedMailController, OrderProductImageController, RestockProductImageController],
+  controllers: [EmailController, ManagedMailController, OrderProductImageController, RestockProductImageController, MailPreferencesController],
   providers: [
     MailTransportFactory,
     EmailService,

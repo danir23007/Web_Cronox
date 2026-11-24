@@ -11,6 +11,8 @@ import { restockDeliveryOutcome } from './restock-delivery.error';
 import { EmailQuotaWaitError, quotaAttemptId, quotaWaiting, recipientUnits, reserveAccountQuota } from './mail-account-quota';
 import { decrypt, encrypt, maxMessageBytes, maxAttachmentBytes } from '../mailbox/mailbox-security';
 import { boundedSmtpTransport } from './bounded-smtp-transport';
+import { assertCommercialMailAllowed, composeApplicationMail } from './mail-footer-composition';
+import { simpleParser } from 'mailparser';
 
 @Injectable()
 export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
@@ -23,13 +25,16 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
   private readonly config = loadEmailConfig();
   private readonly transports = new Map<EmailSenderKey, Transporter>();
 
-  async sendMail(senderKey: EmailSenderKey, options: SendMailOptions, purpose?: string, deadline?: number): Promise<{ messageId: string; accepted?: unknown[]; queued?: boolean }> {
+  async sendMail(senderKey: EmailSenderKey, options: SendMailOptions, purpose?: string, deadline?: number, footerPurpose = purpose): Promise<{ messageId: string; accepted?: unknown[]; queued?: boolean }> {
     if (!this.db) throw new Error('EMAIL_AUDIT_UNAVAILABLE');
     if (options.raw || options.envelope) throw Error('EMAIL_RAW_INPUT_UNSUPPORTED');
     // No message is sent unless the attempt is durably recorded first.
     // Do not persist HTML, credentials, verification links or discount codes.
     const recipient = typeof options.to === 'string' ? options.to : '[multiple recipients]';
-    const { units } = recipientUnits(options);
+    const { units, recipients } = recipientUnits(options);
+    await assertCommercialMailAllowed(this.db, footerPurpose, recipients);
+    const content = await composeApplicationMail(this.db, options, { purpose: footerPurpose, recipients });
+    options = { ...options, ...content };
     let totalAttachments = 0;
     for (const attachment of options.attachments || []) {
       if (attachment.path || (attachment as { href?: string }).href || !attachment.content ||
@@ -56,9 +61,9 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
       await this.db.emailDelivery.create({ data: { ...data, status: 'WAITING_QUOTA', pendingPayload: payload, readyAt: error.retryAt } });
       return { messageId: data.id, queued: true }; // not an SMTP acceptance
     }
-    return this.deliverAttempt(attempt.id, senderKey, prepared, deadline);
+    return this.deliverAttempt(attempt.id, senderKey, prepared, deadline, footerPurpose);
   }
-  private async deliverAttempt(id: string, senderKey: EmailSenderKey, options: SendMailOptions, deadline?: number) {
+  private async deliverAttempt(id: string, senderKey: EmailSenderKey, options: SendMailOptions, deadline?: number, purpose?: string) {
     if (!this.db) throw Error('EMAIL_AUDIT_UNAVAILABLE');
     let info: { messageId: string; accepted?: unknown[] };
     let dispose: (() => void) | undefined;
@@ -80,6 +85,9 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
       // For precompiled MIME, Nodemailer's outer wrapper otherwise reports a
       // different generated ID from the one actually contained in the message.
       const messageId = rawMessageId(options.raw);
+      const recipients = (options.envelope as { to?: string[] } | undefined)?.to || [];
+      try { await assertCommercialMailAllowed(this.db, purpose, recipients); }
+      catch (error) { throw Object.assign(error as object, { code: 'EENVELOPE' }); }
       info = await transport.sendMail({ ...options, from, ...(messageId ? { messageId } : {}) });
       if (!info.accepted?.length) throw Object.assign(new Error('SMTP_RECIPIENT_NOT_ACCEPTED'), { code: 'EENVELOPE' });
     } catch (error) {
@@ -166,7 +174,18 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
           await this.db.emailDelivery.updateMany({ where: { id: job.id, status: 'WAITING_QUOTA' }, data: { readyAt: error.retryAt } });
           continue;
         }
-        if (claimed) await this.deliverAttempt(job.id, key, { raw: Buffer.from(payload.raw,'base64'), envelope: payload.envelope }).catch(() => this.logger.warn('EMAIL_DEFERRED_DELIVERY_RECORDED'));
+        if (claimed) {
+          // Old queued MIME also receives the current footer without replaying
+          // the event, changing its Message-ID or dropping buffered attachments.
+          const parsed = await simpleParser(Buffer.from(payload.raw, 'base64'));
+          const recipients = payload.envelope.to;
+          const content = await composeApplicationMail(this.db, { html: parsed.html || '', text: parsed.text || '' }, { purpose: job.purpose, recipients });
+          const prepared = await compileMailMessage(this.getFrom(key), { ...content, to: recipients, subject: parsed.subject,
+            messageId: parsed.messageId, date: parsed.date, inReplyTo: parsed.inReplyTo, references: parsed.references,
+            attachments: parsed.attachments.map(file => ({ filename: file.filename, content: file.content, contentType: file.contentType, cid: file.cid })) });
+          await this.deliverAttempt(job.id, key, { ...prepared, envelope: payload.envelope }, undefined, job.purpose || undefined)
+            .catch(() => this.logger.warn('EMAIL_DEFERRED_DELIVERY_RECORDED'));
+        }
       }
     } finally { this.running = false; }
   }
