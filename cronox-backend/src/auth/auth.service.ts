@@ -99,6 +99,7 @@ export class AuthService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           ...(dto.registrationSource === 'newsletter' ? { newsletterSubscribed: true } : {}),
+          ...(dto.registrationSource === 'event' ? { eventRegistration: true } : {}),
         });
     } catch (error) {
       // Another registration/checkout may create it after the first lookup.
@@ -120,7 +121,7 @@ export class AuthService {
   }
 
   private async requireRegistrationVerification(user: User, source?: RegisterDto['registrationSource']) {
-    if (source === 'newsletter') {
+    if (source === 'newsletter' || source === 'event') {
       throw new ConflictException('Este correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.');
     }
     if (user.password !== null || user.accountState !== UserAccountState.ACTIVE || !['USER', 'FRIEND'].includes(user.role)) {

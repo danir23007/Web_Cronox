@@ -1,0 +1,11 @@
+# Event registration QR
+
+The permanent public URL is `https://cronox.es/registro-evento`. It embeds the normal shared authentication form on first paint and remains accessible while the public preregistration gate is closed. The newsletter popup is disabled on this page. Login, password policy, session handling, CSRF, rate limits and validation use the normal authentication implementation.
+
+Only new registrations carrying `registrationSource: event` create an event attribution. The account and the `Usuario de evento` AdminNote are created in the same database transaction. The note has a deterministic per-account key and is shown in the administrator's Observaciones field alongside existing notes. New event accounts explicitly use role USER and do not inherit or create marketing consent. Existing-email attempts and login never attribute or modify an existing account. No schema migration or existing QR format changes are required.
+
+The current full-name/password registration completes immediately; there is no new verification step. Attribution is persisted before completion and survives subsequent password-recovery verification. The normal passwordless-account verification flow remains unchanged.
+
+`node cronox-backend/scripts/test-event-registration.cjs` exercises the real local application and shared mobile/desktop form against a disposable loopback PostgreSQL database, with EmailService replaced before application startup. `CRONOX_EVENT_TEST_LOCAL_ENV` can select an existing local configuration. It never uses a remote database or real SMTP. Jest adds DTO, attribution, shared-form, error/retry and existing-account coverage.
+
+Deploy with the existing Deploy CRONOX workflow: verification-only on the feature commit, fast-forward main, then publish from main. After verifying that deployment in production, run `node cronox-backend/scripts/generate-event-registration-qr.cjs [output-directory]`. It checks the live route before generating a black-on-white static PNG (at least 2400 pixels) and vector SVG, with four modules of quiet zone. ZXing decodes both at full size and at 300 and 240 pixels; a report records the exact URL. Generated delivery files are artifacts, not a second production release.

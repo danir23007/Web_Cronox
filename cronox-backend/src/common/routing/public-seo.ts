@@ -1,3 +1,4 @@
+import { renderEventRegistration } from './event-registration';
 import type { RequestHandler } from 'express';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -261,6 +262,7 @@ export function sitemapXml(links: CatalogLink[]): string {
 
 const isUtility = (path: string): boolean =>
   path === '/preferencias-correo' || path === '/mail-preferences.html' ||
+  ['/registro-evento', '/event-register.html'].includes(path) ||
   /^(?:\/admin(?:[/.\-]|$)|\/docs(?:\/|$)|\/api(?:\/|$))/.test(path) ||
   [
     '/cuenta',
@@ -402,6 +404,7 @@ export function createSeoPages(
       return res.redirect(308, `${path}${query.size ? `?${query}` : ''}`);
     try {
       let html = template(file);
+      if (file === 'event-register.html') html = renderEventRegistration(html, readFileSync(join(frontendRoot, 'auth-modal.html'), 'utf8'));
       if (file === 'cart.html' && shipping) {
         try {
           html = renderCartShipping(html, await shipping());
