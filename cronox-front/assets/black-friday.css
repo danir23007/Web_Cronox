@@ -30,11 +30,21 @@
 .bf-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 @keyframes bf-marquee { to { transform:translateX(-50%); } }
 @media(max-width:600px) {
-  .bf-banner { height:52px; gap:12px; padding:0 10px 0 0; }
+  .bf-banner { height:52px; grid-template-columns:minmax(0,1fr) minmax(0,25%); gap:0; padding:0 4px 0 0; }
   .bf-banner .bf-message { font-size:12px; }
-  .bf-banner .bf-clock { gap:6px; }
-  .bf-banner .bf-units { gap:6px; }
-  .bf-banner .bf-units b { font-size:16px; }
+  /* The separator belongs to the clock's 25% allocation, never to the marquee. */
+  .bf-banner .bf-clock { box-sizing:border-box; min-width:0; width:100%; padding-left:4px; flex-direction:column; gap:3px; }
+  .bf-banner .bf-clock-label { width:auto; max-width:100%; font-size:8px; line-height:1; letter-spacing:0; white-space:nowrap; }
+  .bf-banner .bf-units { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; gap:0; }
+  .bf-banner .bf-units > span { position:relative; min-width:0; gap:2px; }
+  .bf-banner .bf-units b { min-width:0; font-size:12px; font-variant-numeric:tabular-nums; }
+  .bf-banner .bf-units > span:not(:last-child)::after { content:':'; position:absolute; top:0; right:-1px; font-size:12px; line-height:1; }
+  .bf-banner .bf-units small { font-size:0; line-height:1; letter-spacing:0; }
+  .bf-banner .bf-units small::after { font-size:7px; }
+  .bf-banner .bf-units > span:nth-child(1) small::after { content:'D'; }
+  .bf-banner .bf-units > span:nth-child(2) small::after { content:'H'; }
+  .bf-banner .bf-units > span:nth-child(3) small::after { content:'M'; }
+  .bf-banner .bf-units > span:nth-child(4) small::after { content:'S'; }
   .bf-hero { gap:24px; }
 }
 @media(prefers-reduced-motion:reduce) {
