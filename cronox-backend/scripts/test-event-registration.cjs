@@ -61,7 +61,7 @@ async function main() {
     const { createPublicHtmlGateMiddleware } = require('../src/common/routing/public-html-gate.middleware');
     const { createSeoPages } = require('../src/common/routing/public-seo');
     app.use(createPublicHtmlGateMiddleware({ authService: { hasValidAdminSession: async () => false },
-      keyScreen: { shouldGatePublicHtml: async () => true }, frontendRoot: path.join(root, 'cronox-front') }));
+      keyScreen: { shouldGatePublicHtml: async () => false }, frontendRoot: path.join(root, 'cronox-front') }));
     app.use(createSeoPages(path.join(root, 'cronox-front'), { links: async () => [], product: async () => null }));
     app.use(require('express').static(path.join(root, 'cronox-front/public')));
     app.use(require('express').static(path.join(root, 'cronox-front')));
@@ -81,28 +81,54 @@ async function main() {
     await page.goto(url + '/registro-evento');
     await page.waitForLoadState('networkidle');
     await page.locator('#authRegisterForm.is-active').waitFor({ state: 'visible' });
+    const captures = path.join(root, 'output/event-registration/popup'); fs.mkdirSync(captures, { recursive: true });
+    assert.equal(await page.locator('#authOverlay').count(), 1);
+    assert.equal(await page.locator('#eventRegistrationBackground').getAttribute('inert'), '');
+    assert.ok(await page.locator('#hero .hero-video').count());
+    await page.mouse.move(4, 4); await page.mouse.wheel(0, 500); await page.waitForTimeout(100); assert.equal(await page.evaluate(() => scrollY), 0);
+    await page.locator('#authRegisterForm [data-auth-forgot]').focus(); await page.keyboard.press('Tab'); assert.equal(await page.evaluate(() => document.activeElement.id), 'authCloseBtn');
+    await page.mouse.click(4, 4); assert.equal(await page.locator('#authOverlay').getAttribute('aria-hidden'), 'false');
+    await page.screenshot({ path: path.join(captures, 'mobile.png'), fullPage: false });
+    await page.reload(); await page.locator('#authRegisterForm.is-active').waitFor({ state: 'visible' });
+    await page.setViewportSize({ width: 390, height: 460 });
+    await page.locator('#authRegisterForm button[type=submit]').scrollIntoViewIfNeeded();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.locator('.newsletter-modal-overlay').count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.locator('#authRegisterFirstName').fill('Persona'); await page.locator('#authRegisterLastName').fill('Prueba');
     await page.locator('#authRegisterEmail').fill(fixture); await page.locator('#authRegisterPassword').fill('SecurePassword1!');
+    await page.route('**/auth/register', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Error simulado de registro' }) }));
     await page.locator('#authRegisterForm button[type=submit]').click();
-    try { await page.locator('#eventRegistrationComplete').waitFor({ state: 'visible', timeout: 20000 }); }
+    await page.getByText('No hemos podido guardar los cambios. Conservamos tus datos; vuelve a intentarlo en unos minutos.', { exact: true }).waitFor();
+    assert.equal(await page.locator('#authRegisterEmail').inputValue(), fixture);
+    assert.equal(await page.locator('#authOverlay').getAttribute('aria-hidden'), 'false');
+    await page.unroute('**/auth/register');
+    await page.locator('#authRegisterForm button[type=submit]').click();
+    try { await page.waitForURL(url + '/', { timeout: 20000 }); }
     catch (error) { console.error('FORM_STATE', await page.locator('#authRegisterForm').innerText()); throw error; }
     const user = await db.user.findUniqueOrThrow({ where: { email: fixture } });
+    assert.equal(await db.newsletterMailJob.count({ where: { userId: user.id, kind: 'WELCOME' } }), 1);
     assert.equal(user.role, 'USER'); assert.equal(user.newsletterSubscribed, false);
     assert.equal(await db.newsletterSubscription.count({ where: { email: fixture } }), 0);
     const profile = await admin.getUserById(user.id); assert.equal(profile.user.observations, 'Usuario de evento');
     assert.equal(await db.adminNote.count({ where: { targetType: 'user', targetId: String(user.id), content: 'Usuario de evento' } }), 1);
     report.checks.push('Real mobile registration through shared UI, session and CSRF; USER role; exact persisted administrator observation; no marketing opt-in or popup; no overflow');
+    await page.goto(url + '/registro-evento'); await page.waitForURL(url + '/');
     const desktop = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await desktop.addInitScript(base => { window.__CRONOX_API_BASE__ = base; }, url);
     const desktopPage = await desktop.newPage(); await desktopPage.goto(url + '/registro-evento');
     await desktopPage.locator('#authRegisterForm.is-active').waitFor({ state: 'visible' });
+    await desktopPage.waitForLoadState('networkidle');
+    console.log('TOPBAR_METRICS', await desktopPage.locator('.topbar').evaluate(el => ({display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,opacity:getComputedStyle(el).opacity,rect:el.getBoundingClientRect().toJSON(),html:document.documentElement.className})));
+    await desktopPage.screenshot({ path: path.join(captures, 'desktop.png'), fullPage: false });
+    await desktopPage.locator('#authCloseBtn').click(); await desktopPage.waitForURL(url + '/');
+    await desktopPage.goto(url + '/registro-evento'); await desktopPage.locator('#authRegisterForm.is-active').waitFor({ state: 'visible' });
     assert.equal(await desktopPage.locator('.newsletter-modal-overlay').count(), 0);
     await desktopPage.locator('[data-auth-switch=login]').click();
     await desktopPage.locator('#authLoginEmail').fill(fixture); await desktopPage.locator('#authLoginPassword').fill('SecurePassword1!');
     await desktopPage.locator('#authLoginForm button[type=submit]').click();
-    await desktopPage.locator('#eventRegistrationComplete').waitFor({ state: 'visible' });
+    await desktopPage.waitForURL(url + '/');
     assert.equal(await db.adminNote.count({ where: { targetType: 'user', targetId: String(user.id) } }), 1);
     report.checks.push('Desktop direct form and existing-account login reuse normal handlers without another event annotation');
     await assert.rejects(auth.register(dto(fixture))); assert.equal(await db.user.count({ where: { email: fixture } }), 1);

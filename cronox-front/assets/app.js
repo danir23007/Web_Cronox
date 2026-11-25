@@ -2547,7 +2547,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     authOverlay.classList.add('is-open');
     authOverlay.classList.remove('auth-hidden');
     authOverlay.setAttribute('aria-hidden', 'false');
-    if (!(document.body?.dataset.registrationSource === 'event')) lockBody();
+    lockBody();
     const focusInput = currentView === 'register' ? (newsletterRegistration ? registerFirstName : registerEmail) : loginEmail;
     if (focusInput) setTimeout(() => {
       // A fast tap/autofill may already have selected another field. Do not
@@ -2561,7 +2561,8 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const closeAuthModal = () => {
-    if ((document.body?.dataset.registrationSource === 'event') || !authOverlay) return;
+    if (document.body?.dataset.registrationSource === 'event') { window.location.replace('/'); return; }
+    if (!authOverlay) return;
     const returnFocus = authReturnFocus;
     authReturnFocus = null;
     authOverlay.classList.remove('is-open');
@@ -2656,6 +2657,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       setAuthMessage('Iniciando sesión...');
       const user = await window.CRONOX_API.login({ email, password });
       publishAuthState(user);
+      if (document.body?.dataset.registrationSource === 'event') return;
       if (context?.signup && newsletterRegistration === context) {
         await persistNewsletterSubscription(context.email);
         publishAuthState({ ...user, newsletterSubscribed: true });
@@ -2888,11 +2890,12 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     }
 
     authDialog?.addEventListener('click', (ev) => ev.stopPropagation());
-    const consentAboveAuth = () => Boolean(document.querySelector('.cronox-consent:not([hidden]), .cronox-consent-panel:not([hidden])'));
+    const consentAboveAuth = () => document.body?.dataset.registrationSource !== 'event' && Boolean(document.querySelector('.cronox-consent:not([hidden]), .cronox-consent-panel:not([hidden])'));
     document.addEventListener('keydown', (event) => {
-      if ((document.body?.dataset.registrationSource === 'event') || !authOverlay?.classList.contains('is-open') || consentAboveAuth()) return;
+      if (!authOverlay?.classList.contains('is-open') || consentAboveAuth()) return;
       if (event.key === 'Escape') {
         event.preventDefault();
+        if (document.body?.dataset.registrationSource === 'event') return;
         closeAuthModal();
         return;
       }

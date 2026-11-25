@@ -5,7 +5,7 @@ import { renderEventRegistration } from '../common/routing/event-registration';
 import { cleanPageForPath, UNGATED_PUBLIC_PATHS, legacyRedirectTarget } from '../common/routing/public-pages';
 
 const read = (file: string) => readFileSync(path.resolve(__dirname, '../../../cronox-front', file), 'utf8');
-const html = () => renderEventRegistration(read('event-register.html'), read('auth-modal.html'));
+const html = () => renderEventRegistration(read('event-register.html'), read('auth-modal.html'), read('index.html'));
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); };
 describe('direct event registration', () => {
   it('serves the existing form directly on a stable public route, including when the shop is closed', () => {
@@ -13,6 +13,10 @@ describe('direct event registration', () => {
     expect(UNGATED_PUBLIC_PATHS.has('/registro-evento')).toBe(true);
     expect(legacyRedirectTarget('/event-register.html', '/event-register.html')).toBe('/registro-evento');
     const doc = new JSDOM(html()).window.document;
+    expect(doc.querySelectorAll('#authOverlay')).toHaveLength(1);
+    expect(doc.querySelector('[role="dialog"]')?.getAttribute('aria-modal')).toBe('true');
+    expect(doc.querySelector('#eventRegistrationBackground')?.hasAttribute('inert')).toBe(true);
+    expect(doc.querySelector('#hero .hero-video')?.getAttribute('src')).toBe(new JSDOM(read('index.html')).window.document.querySelector('#hero .hero-video')?.getAttribute('src'));
     expect(doc.querySelector('#authRegisterForm')?.classList.contains('is-active')).toBe(true);
     expect(doc.querySelector('#authRegisterLastName')?.hasAttribute('required')).toBe(true);
     expect(doc.querySelector('#authOverlay')?.getAttribute('aria-hidden')).toBe('false');
@@ -42,7 +46,7 @@ describe('direct event registration', () => {
       win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' }));
       expect(win.document.getElementById('authOverlay').getAttribute('aria-hidden')).toBe('false');
       win.dispatchEvent(new win.CustomEvent('cronox:authResolved', { detail: { user: { id: 7 } } }));
-      expect(win.document.getElementById('eventRegistrationComplete').hidden).toBe(false);
+      expect(win.document.getElementById('eventRegistrationBackground').hasAttribute('inert')).toBe(true);
     } finally { dom.window.close(); }
   });
 });

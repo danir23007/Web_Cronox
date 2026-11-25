@@ -404,7 +404,7 @@ export function createSeoPages(
       return res.redirect(308, `${path}${query.size ? `?${query}` : ''}`);
     try {
       let html = template(file);
-      if (file === 'event-register.html') html = renderEventRegistration(html, readFileSync(join(frontendRoot, 'auth-modal.html'), 'utf8'));
+      if (file === 'event-register.html') html = renderEventRegistration(html, readFileSync(join(frontendRoot, 'auth-modal.html'), 'utf8'), template('index.html'));
       if (file === 'cart.html' && shipping) {
         try {
           html = renderCartShipping(html, await shipping());
