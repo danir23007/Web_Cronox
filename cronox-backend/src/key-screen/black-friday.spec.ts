@@ -1,6 +1,8 @@
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { BlackFridayService, SaveBlackFridayDto } from './black-friday';
+import { ValidationPipe } from '@nestjs/common';
+import { SetKeyScreenEnabledDto, SetKeyScreenExpirationDto, UpdateKeyScreenDto } from './dto/key-screen.dto';
 
 const valid = {
   enabled: true,
@@ -14,6 +16,27 @@ const valid = {
   revision: 1,
 };
 describe('Black Friday visual settings', () => {
+  it('rejects cross-form fields using the production validation policy', async () => {
+    const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
+    for (const [metatype, value] of [
+      [SaveBlackFridayDto, { ...valid, activeScreenId: 'old-preregistration', expiresAt: null }],
+      [SetKeyScreenEnabledDto, { enabled: false, bannerText: valid.bannerText }],
+      [SetKeyScreenExpirationDto, { expiresAt: null, startsAt: valid.startsAt }],
+      [UpdateKeyScreenDto, { expectedRevision: 1, title: 'Guardada', bannerText: valid.bannerText }],
+    ] as const) {
+      await expect(pipe.transform(value, { type: 'body', metatype })).rejects.toThrow();
+    }
+  });
+
+  it.each([true, false])('saving campaign enabled=%s never writes preregistration settings', async (enabled) => {
+    const gate = { enabled: false, activeScreenId: 'saved' };
+    const keyScreenSettings = { update: jest.fn(), updateMany: jest.fn(), upsert: jest.fn() };
+    const blackFridaySettings = { upsert: jest.fn().mockResolvedValue(valid), updateMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    const service = new BlackFridayService({ keyScreenSettings, blackFridaySettings } as never);
+    await service.save({ ...valid, enabled, activeScreenId: gate.activeScreenId } as SaveBlackFridayDto);
+    expect(blackFridaySettings.updateMany.mock.calls[0][0].data).not.toHaveProperty('activeScreenId');
+    for (const write of Object.values(keyScreenSettings)) expect(write).not.toHaveBeenCalled();
+  });
   const setup = () => {
     const table = {
       findUnique: jest.fn(),

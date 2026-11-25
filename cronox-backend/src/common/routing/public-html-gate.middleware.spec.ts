@@ -53,6 +53,19 @@ describe('public HTML Key Screen gate', () => {
     expect(response.text).not.toBe('PUBLIC:/');
   });
 
+  it.each(['/', '/tienda', '/producto/scarred-tee-red'])('opens %s without any session when preregistration is disabled', async (path) => {
+    const auth = jest.fn(() => false);
+    for (const cookies of ['', 'jwt=ordinary-user']) {
+      const response = await request(createApp(false, auth)).get(path).set('Cookie', cookies).set('Accept', 'text/html');
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(`PUBLIC:${path}`);
+      expect(response.headers.location).toBeUndefined();
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(response.headers.vary).toContain('Cookie');
+    }
+    expect(auth).not.toHaveBeenCalled();
+  });
+
   it('keeps an authenticated normal user behind the Key Screen', async () => {
     const response = await request(createApp(true))
       .get('/')

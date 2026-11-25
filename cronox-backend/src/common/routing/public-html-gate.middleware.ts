@@ -67,6 +67,10 @@ export const createPublicHtmlGateMiddleware =
       const acceptsHtml = req.accepts(['html', 'json']) === 'html';
       if (!acceptsHtml) return next();
 
+      // A gated response and an authenticated preview must never be shared by caches.
+      // Keep the same cache policy when the gate is off so opening is immediately public.
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.vary('Cookie');
       const keyScreenEnabled = await keyScreen.shouldGatePublicHtml();
       if (UNGATED_PUBLIC_PATHS.has(pathname)) {
         if (keyScreenEnabled) {

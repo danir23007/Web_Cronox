@@ -261,15 +261,16 @@ export class KeyScreenService {
     if (!enabled) {
       for (let attempt = 0; attempt < 3; attempt++) {
         const latest = await this.prisma.keyScreenSettings.findUnique({ where: { id: GLOBAL_ID } });
-        if (!latest?.enabled) {
+        if (!latest || (!latest.enabled && latest.launchStatus !== 'ARMED')) {
           this.invalidateGateCache();
           return this.toAdminSettings(latest || current);
         }
         const armed = latest.launchStatus === 'ARMED';
         const updated = await this.prisma.keyScreenSettings.updateMany({
-          where: { id: GLOBAL_ID, enabled: true, launchStatus: latest.launchStatus },
+          where: { id: GLOBAL_ID, enabled: latest.enabled, launchStatus: latest.launchStatus },
           data: { enabled: false, updatedBy: adminId,
-            ...(armed ? { launchStatus: 'SENDING', launchStartedAt: new Date(), launchTrigger: 'MANUAL' } : {}) },
+            // Opening the storefront is never a request to enqueue retired launch mail.
+            ...(armed ? { launchStatus: 'PENDING', launchArmedAt: null } : {}) },
         });
         if (updated.count === 1) {
           const settings = await this.prisma.keyScreenSettings.findUniqueOrThrow({ where: { id: GLOBAL_ID } });

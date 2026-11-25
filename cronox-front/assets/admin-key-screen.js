@@ -333,11 +333,11 @@
   el.create.addEventListener("click", async () => { const internalName = el.newName.value.trim(); if (!internalName) return message("Escribe un nombre para la pantalla.", true); try { const screen = await request("/api/admin/key-screens", { method: "POST", body: { internalName } }); state.screens.unshift(screen); state.current = screen; el.newName.value = ""; renderSelect(); message("Pantalla creada."); } catch (error) { message(error.message, true); } });
   el.activate.addEventListener("click", async () => { if (!state.current) return; try { applySettings(await request("/api/admin/key-screens/active", { method: "PATCH", body: { screenId: state.current.id } })); renderSelect(); message("Pantalla seleccionada. Usa el interruptor para mostrarla al público."); } catch (error) { message(error.message, true); } });
   el.master.addEventListener("change", async () => {
-    if (!el.master.checked && state.launch?.status === "ARMED" && !confirm("La campaña está armada. Desactivar ahora la pantalla clave abrirá la web e iniciará el envío real. ¿Continuar?")) {
-      el.master.checked = true;
+    if (el.master.checked && !confirm("Activar la pantalla de prerregistro bloqueará el acceso público a la tienda. Este control no activa Black Friday. ¿Quieres activarla expresamente?")) {
+      el.master.checked = false;
       return;
     }
-    try { applySettings(await request("/api/admin/key-screens/master", { method: "PATCH", body: { enabled: el.master.checked } })); await loadLaunch(); message(state.settings.enabled ? "Pantalla clave activada." : "Pantalla clave desactivada."); }
+    try { applySettings(await request("/api/admin/key-screens/master", { method: "PATCH", body: { enabled: el.master.checked } })); await loadLaunch(); message(state.settings.enabled ? "Prerregistro activado: el acceso público está bloqueado. Black Friday no ha cambiado." : "Prerregistro desactivado: la web está abierta. Black Friday no ha cambiado. No se preparan correos."); }
     catch (error) { el.master.checked = Boolean(state.settings?.enabled); message(error.message, true); }
   });
   el.launchArm.addEventListener("click", async () => {

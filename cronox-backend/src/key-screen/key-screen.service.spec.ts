@@ -58,6 +58,51 @@ describe('KeyScreenService', () => {
     jest.useRealTimers();
   });
 
+  it.each([true, false])('disarms retired launch mail when opening public access (previous enabled=%s)', async (enabled) => {
+    const row = { id: 'global', enabled, activeScreenId: 'saved', expiresAt: new Date('2027-01-01Z'), launchStatus: 'ARMED', launchArmedAt: new Date() };
+    prisma.keyScreenSettings.findUnique.mockImplementation(async () => ({ ...row }));
+    prisma.keyScreenSettings.findUniqueOrThrow = jest.fn(async () => ({ ...row }));
+    prisma.keyScreenSettings.updateMany = jest.fn(async ({ data }: any) => { Object.assign(row, data); return { count: 1 }; });
+    prisma.blackFridaySettings = { update: jest.fn(), updateMany: jest.fn(), upsert: jest.fn() };
+    await service.setEnabled(false, 7);
+    expect(row).toMatchObject({ enabled: false, activeScreenId: 'saved', launchStatus: 'PENDING', launchArmedAt: null });
+    expect(row.expiresAt).toEqual(new Date('2027-01-01Z'));
+    expect(prisma.keyScreenSettings.updateMany.mock.calls[0][0].data).not.toHaveProperty('launchStartedAt');
+    expect(prisma.blackFridaySettings.update).not.toHaveBeenCalled();
+    expect(prisma.blackFridaySettings.updateMany).not.toHaveBeenCalled();
+    expect(prisma.blackFridaySettings.upsert).not.toHaveBeenCalled();
+    expect(email.sendPreRegistrationConfirmation).not.toHaveBeenCalled();
+    expect(prisma.preRegistration.updateMany).not.toHaveBeenCalled();
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it('preserves historical completed launch records when opening access', async () => {
+    const row = { enabled: true, launchStatus: 'COMPLETED', launchCompletedAt: new Date('2026-09-24Z') };
+    prisma.keyScreenSettings.findUnique.mockResolvedValue(row);
+    prisma.keyScreenSettings.updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    prisma.keyScreenSettings.findUniqueOrThrow = jest.fn().mockResolvedValue({ ...row, enabled: false });
+    await service.setEnabled(false, 7);
+    expect(prisma.keyScreenSettings.updateMany).toHaveBeenCalledWith({
+      where: { id: 'global', enabled: true, launchStatus: 'COMPLETED' },
+      data: { enabled: false, updatedBy: 7 },
+    });
+  });
+
+  it('editing, selecting, expiring and explicitly enabling preregistration leaves the campaign untouched', async () => {
+    prisma.blackFridaySettings = { updateMany: jest.fn(), upsert: jest.fn() };
+    const settings = { enabled: false, activeScreenId: 'saved', launchStatus: 'COMPLETED' };
+    prisma.keyScreenSettings.upsert.mockResolvedValue(settings);
+    prisma.keyScreenSettings.update.mockImplementation(async ({ data }: any) => ({ ...settings, ...data }));
+    prisma.keyScreen.findUnique.mockResolvedValue({ id: 'saved', mode: KeyScreenMode.PREREGISTRATION, mediaAssetId: 'asset' });
+    prisma.keyScreen.updateMany.mockResolvedValue({ count: 1 });
+    await service.update('saved', { expectedRevision: 1, title: 'Saved screen' }, 7);
+    await service.activate('saved', 7);
+    await service.setExpiration(null, 7);
+    await service.setEnabled(true, 7);
+    for (const write of Object.values(prisma.blackFridaySettings) as jest.Mock[]) expect(write).not.toHaveBeenCalled();
+    expect(email.sendPreRegistrationConfirmation).not.toHaveBeenCalled();
+  });
+
   it('keeps the manual switch authoritative and expires at the exact UTC instant', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));

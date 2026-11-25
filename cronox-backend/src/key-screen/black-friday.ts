@@ -94,11 +94,16 @@ export class BlackFridayService {
         'La fecha de finalización debe ser posterior a la de inicio.',
       );
     }
-    const { revision, ...values } = dto;
+    const { revision } = dto;
     const result = await this.prisma.blackFridaySettings.updateMany({
       where: { id: 'global', revision },
       data: {
-        ...values,
+        enabled: dto.enabled,
+        title: dto.title,
+        bannerText: dto.bannerText,
+        eventText: dto.eventText,
+        textColor: dto.textColor,
+        backgroundColor: dto.backgroundColor,
         startsAt,
         endsAt,
         updatedBy,

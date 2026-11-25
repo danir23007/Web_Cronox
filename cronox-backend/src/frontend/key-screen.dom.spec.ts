@@ -46,6 +46,9 @@ describe('Pantalla Clave frontend integration', () => {
     ).not.toBeNull();
     expect(document.querySelector('#section-key-screen')).not.toBeNull();
     expect(document.querySelector('#keyMaster')).not.toBeNull();
+    expect(document.querySelector('.key-switch')?.textContent).toContain('Pantalla de prerregistro · Bloquea el acceso público');
+    expect(document.querySelector('#bfAdminTitle')?.textContent).toBe('Campaña Black Friday · Contador y banner sobre la web abierta');
+    expect(document.querySelector('#keyForm #bfAdminForm')).toBeNull();
     expect(
       document.querySelector('#keyForm button[type="submit"]')?.textContent,
     ).toContain('Guardar');
