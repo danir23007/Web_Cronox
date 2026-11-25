@@ -31,9 +31,9 @@ body.page-gallery {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: 0;
-  height: calc(100vh - var(--topbar-h, 64px));
-  height: calc(100svh - var(--topbar-h, 64px));
-  height: calc(100dvh - var(--topbar-h, 64px) - env(safe-area-inset-top));
+  height: calc(100vh - var(--header-stack-h,var(--topbar-h, 64px)));
+  height: calc(100svh - var(--header-stack-h,var(--topbar-h, 64px)));
+  height: calc(100dvh - var(--header-stack-h,var(--topbar-h, 64px)) - env(safe-area-inset-top));
   overflow: hidden;
 }
 

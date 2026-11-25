@@ -111,7 +111,7 @@ describe('PDP recommended-product cards', () => {
   });
 
   it('loads exactly the incremented PDP stylesheet cache version', () => {
-    expect(productHtml).toContain('href="assets/product-page.css?v=11"');
+    expect(productHtml).toContain('href="assets/product-page.css?v=12"');
     expect(productHtml).not.toContain('href="assets/product-page.css?v=7"');
   });
 });

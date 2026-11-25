@@ -153,7 +153,7 @@ describe('CRONOX gallery page', () => {
       document.querySelectorAll<HTMLElement>('#galleryGrid .gallery__tile'),
     );
     expect(galleryHtml).toContain('<title>Galer&iacute;a | CRONOX</title>');
-    expect(galleryHtml).toContain('href="assets/gallery.css?v=20"');
+    expect(galleryHtml).toContain('href="assets/gallery.css?v=21"');
     expect(galleryHtml).toContain('src="assets/gallery.js?v=18"');
     expect(document.title).toBe('Galer\u00eda | CRONOX');
     expect(document.querySelectorAll('#topbar')).toHaveLength(1);
@@ -244,7 +244,7 @@ describe('CRONOX gallery page', () => {
       homepageGallerySection.compareDocumentPosition(footer) &
         dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(homepageHtml).toContain('href="assets/gallery.css?v=20"');
+    expect(homepageHtml).toContain('href="assets/gallery.css?v=21"');
     expect(homepageHtml).toMatch(/src="assets\/gallery\.min\.js\?v=[a-f0-9]{12}"/);
     expect(document.querySelectorAll('#galleryLightbox')).toHaveLength(1);
     expect(document.querySelectorAll<HTMLElement>('[id]').length).toBe(
@@ -467,10 +467,10 @@ describe('CRONOX gallery page', () => {
     );
     expect(galleryStyles).toContain('gap: 0');
     expect(galleryStyles).toContain(
-      'height: calc(100svh - var(--topbar-h, 64px))',
+      'height: calc(100svh - var(--header-stack-h,var(--topbar-h, 64px)))',
     );
     expect(galleryStyles).toContain(
-      'height: calc(100dvh - var(--topbar-h, 64px) - env(safe-area-inset-top))',
+      'height: calc(100dvh - var(--header-stack-h,var(--topbar-h, 64px)) - env(safe-area-inset-top))',
     );
     expect(galleryStyles).toContain('border-radius: 0');
     expect(galleryStyles).toContain('box-shadow: none');

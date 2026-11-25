@@ -3,7 +3,7 @@
 :root{ --topbar-h:64px; }
 
 html, body { width:100%; max-width:100%; background:#000; color:#eaeaea; margin:0; }
-body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
+body { padding-top: calc(var(--header-stack-h,var(--topbar-h)) + env(safe-area-inset-top)); }
 
 .topbar{
   position:fixed; top:0; left:0; right:0; height:var(--topbar-h);

@@ -490,7 +490,7 @@ describe('CRONOX admin gallery', () => {
     expect(document.getElementById('galleryUploadProgress')).not.toBeNull();
     expect(document.getElementById('galleryMoveModal')).toBeNull();
     expect(document.getElementById('galleryMoveDestination')).toBeNull();
-    expect(adminHtml).toContain('assets/gallery.css?v=20');
+    expect(adminHtml).toContain('assets/gallery.css?v=21');
     expect(adminHtml).toContain('assets/gallery.js?v=18');
     expect(adminHtml).toContain('assets/admin-gallery.css?v=6');
     expect(adminHtml).toContain('assets/admin-gallery.js?v=7');

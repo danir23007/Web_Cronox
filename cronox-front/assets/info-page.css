@@ -12,14 +12,14 @@ body.page-info {
 body.page-info:not(.page-gallery) {
   box-sizing: border-box;
   padding: calc(
-      var(--topbar-h, 64px) + env(safe-area-inset-top) + clamp(28px, 4vw, 52px)
+      var(--header-stack-h,var(--topbar-h, 64px)) + env(safe-area-inset-top) + clamp(28px, 4vw, 52px)
     )
     clamp(20px, 4vw, 48px) clamp(56px, 7vw, 96px);
   align-items: flex-start;
 }
 
 body.page-info.page-gallery {
-  padding-top: calc(var(--topbar-h, 64px) + env(safe-area-inset-top));
+  padding-top: calc(var(--header-stack-h,var(--topbar-h, 64px)) + env(safe-area-inset-top));
 }
 
 body.page-info > .topbar {

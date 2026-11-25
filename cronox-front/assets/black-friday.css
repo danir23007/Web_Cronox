@@ -1,0 +1,45 @@
+/* Every layout override is gated by the mounted campaign. */
+.bf-active { --bf-offset:0px; --header-stack-h:calc(var(--topbar-h,64px) + var(--bf-offset)); }
+.bf-active .topbar { top:var(--bf-offset); transition:top .28s ease,background-color .35s ease; }
+.bf-active .searchbar { top:calc(var(--header-stack-h) + env(safe-area-inset-top)); }
+.bf-host { position:relative; isolation:isolate; }
+/* Temporarily give the campaign the existing editorial text's area; its saved content and geometry stay intact. */
+.bf-host .hero-overlay-text { visibility:hidden; }
+.bf-hero { position:absolute; inset:0; z-index:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:calc(90px + env(safe-area-inset-top)) 16px 48px; color:#fff; background:linear-gradient(180deg,#0002,#0009 50%,#0005); text-align:center; pointer-events:none; transition:opacity .28s ease,visibility .28s; }
+.bf-hero .bf-message { margin:0; font:700 clamp(28px,6vw,90px)/1.1 Arial,sans-serif; letter-spacing:.1em; text-wrap:balance; max-width:100%; overflow-wrap:anywhere; }
+.bf-clock { display:flex; flex-direction:column; align-items:center; gap:12px; flex-shrink:0; font-family:Arial,sans-serif; }
+.bf-clock-label { font-size:12px; letter-spacing:.2em; }
+.bf-units { display:flex; gap:clamp(12px,3vw,48px); font-variant-numeric:tabular-nums; }
+.bf-units > span { display:flex; flex-direction:column; align-items:center; gap:9px; }
+.bf-units b { font-size:clamp(32px,7vw,104px); line-height:1; min-width:2ch; }
+.bf-units small { font-size:clamp(9px,1vw,12px); letter-spacing:.12em; }
+.bf-banner { position:fixed; inset:0 0 auto; z-index:1002; height:48px; display:grid; grid-template-columns:minmax(0,1fr) max-content; align-items:center; gap:24px; padding:0 20px 0 0; overflow:hidden; pointer-events:none; clip-path:inset(0 0 100%); transition:opacity .28s ease,clip-path .28s ease,visibility .28s; font-family:Arial,sans-serif; }
+.bf-compact .bf-banner { clip-path:inset(0); }
+.bf-banner .bf-message { width:100%; min-width:0; overflow:hidden; white-space:nowrap; font-size:14px; letter-spacing:.1em; }
+.bf-track { display:inline-flex; }
+.bf-banner .bf-track { display:flex; width:max-content; animation:bf-marquee var(--bf-duration,20s) linear infinite; }
+.bf-banner .bf-run { display:flex; flex-shrink:0; }
+.bf-banner .bf-run > span { display:block; flex-shrink:0; padding-right:4rem; }
+.bf-banner .bf-clock { flex-direction:row; gap:16px; }
+.bf-banner .bf-units { gap:10px; }
+.bf-banner .bf-units > span { gap:2px; }
+.bf-banner .bf-units b { font-size:18px; }
+.bf-banner .bf-units small { font-size:8px; letter-spacing:.02em; }
+.bf-banner .bf-clock-label { flex-shrink:0; width:8ch; font-size:10px; line-height:1.3; letter-spacing:.04em; }
+.bf-hidden { opacity:0; visibility:hidden; pointer-events:none; }
+.bf-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+@keyframes bf-marquee { to { transform:translateX(-50%); } }
+@media(max-width:600px) {
+  .bf-banner { height:52px; gap:12px; padding:0 10px 0 0; }
+  .bf-banner .bf-message { font-size:12px; }
+  .bf-banner .bf-clock { gap:6px; }
+  .bf-banner .bf-units { gap:6px; }
+  .bf-banner .bf-units b { font-size:16px; }
+  .bf-hero { gap:24px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .bf-banner .bf-track { animation:none; }
+  .bf-banner .bf-copy { display:none; }
+  .bf-banner .bf-text { padding:0; }
+  .bf-active .topbar,.bf-banner,.bf-hero { transition:none; }
+}

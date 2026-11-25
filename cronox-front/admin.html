@@ -13,13 +13,13 @@
       if (window.CRONOX_ASSET) {
         const link = document.getElementById('cronox-admin-style');
         if (link) {
-          link.href = window.CRONOX_ASSET('assets/store.css?v=132');
+          link.href = window.CRONOX_ASSET('assets/store.css?v=133');
         }
       }
     })();
   </script>
-  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=132">
-  <link rel="stylesheet" href="assets/gallery.css?v=20">
+  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=133">
+  <link rel="stylesheet" href="assets/gallery.css?v=21">
   <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
   <link rel="stylesheet" href="assets/admin-media.css?v=5">
   <link rel="stylesheet" href="assets/admin-lots.css?v=3">
@@ -292,6 +292,7 @@
   <link rel="stylesheet" href="assets/admin-live-stats.css?v=1">
   <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
   <link rel="stylesheet" href="assets/category-controls.css?v=2">
+  <link rel="stylesheet" href="assets/admin-black-friday.css?v=1">
 </head>
 <body class="bw-theme cronox-admin">
   <div id="adminAuthCheck" class="admin-auth-check" role="status">Verificando acceso…</div>
@@ -1420,6 +1421,37 @@
         <div><h2 id="title-key-screen">PANTALLA CLAVE</h2><small>Control global del acceso al sitio p&uacute;blico.</small></div>
         <label class="key-switch"><span>Pantalla clave</span><input id="keyMaster" type="checkbox"><strong id="keyMasterLabel">DESACTIVADA</strong></label>
       </div>
+      <section class="bf-admin" aria-labelledby="bfAdminTitle">
+        <h3 id="bfAdminTitle">Campaña Black Friday</h3>
+        <p>Capa visual independiente del acceso y del correo de apertura. Los ajustes se conservan al desactivarla.</p>
+        <p>Antes del inicio, el contador ocupa la zona del texto editorial de portada. Al comenzar Black Friday, la portada recupera su presentación habitual y solo permanece el banner superior.</p>
+        <p id="bfAdminStatus" role="status">Sin cargar</p>
+        <form id="bfAdminForm">
+          <fieldset disabled>
+            <label class="bf-admin-switch"><input name="enabled" type="checkbox">Activar campaña Black Friday</label>
+            <label>Título principal<input name="title" maxlength="100" required></label>
+            <label>Texto del banner<input name="bannerText" maxlength="240" required></label>
+            <label>Inicio · Europe/Madrid<input name="startsAt" type="datetime-local" step="60" required><small>Zona horaria Europe/Madrid</small></label>
+            <label>Fin · Europe/Madrid<input name="endsAt" type="datetime-local" step="60" required><small>Zona horaria Europe/Madrid</small></label>
+            <label>Mensaje de evento guardado<input name="eventText" maxlength="100" required><small>Se conserva guardado. La marquesina utiliza siempre «Texto del banner», también durante Black Friday.</small></label>
+            <label>Color del texto del banner<input name="textColor" type="color" value="#ffffff" required></label>
+            <label>Fondo del banner<input name="backgroundColor" type="color" value="#111111" required></label>
+            <button type="submit" class="btn primary">Guardar campaña</button>
+          </fieldset>
+        </form>
+        <div class="bf-admin-actions"><button id="bfReload" class="btn" type="button">Recargar ajustes guardados</button></div>
+        <p id="bfAdminMessage" role="status" aria-live="polite"></p>
+        <h4>Vista previa · portada y cabecera reales</h4>
+        <p>Los controles siguientes solo cambian esta vista. No guardan ni activan la campaña pública.</p>
+        <div class="bf-preview-controls">
+          <label>Dispositivo<select id="bfPreviewDevice" class="select"><option value="desktop">Escritorio</option><option value="mobile">Móvil</option></select></label>
+          <label>Formato<select id="bfPreviewFormat" class="select"><option value="hero">Contador sobre portada</option><option value="compact">Banner compacto</option></select></label>
+          <label>Momento<select id="bfPreviewState" class="select"><option value="before">Antes del inicio</option><option value="event">Durante Black Friday</option></select></label>
+          <button id="bfPreviewOpen" class="btn" type="button">Abrir vista previa</button>
+          <button id="bfPreviewClose" class="btn" type="button">Cerrar vista previa</button>
+        </div>
+        <div id="bfPreviewViewport" class="bf-preview-viewport" hidden><iframe id="bfPreview" title="Vista previa real de Black Friday" style="width:1440px;height:900px" loading="lazy"></iframe></div>
+      </section>
       <p id="keyAdminMessage" class="message" role="status" aria-live="polite"></p>
       <section class="key-expiration" aria-labelledby="keyExpirationTitle">
         <div>
@@ -2213,7 +2245,7 @@
   <script src="assets/admin-after-sales.js?v=2"></script>
   <script src="assets/admin-register.js?v=8"></script>
   <script src="assets/admin-navigation.js?v=4"></script>
-  <script src="assets/admin-shell.js?v=11"></script>
+  <script src="assets/admin-shell.js?v=12"></script>
   <script src="assets/admin-finance.js?v=register-5"></script>
   <script src="assets/admin-points.js?v=11"></script>
   <script src="assets/admin-map.js?v=6"></script>
@@ -2241,6 +2273,7 @@
   <script src="assets/admin-gallery.js?v=7"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>
   <script src="assets/key-screen-time.js?v=1"></script>
+  <script defer src="assets/admin-black-friday.js?v=2"></script>
   <script src="assets/admin-key-screen.js?v=5"></script>
   <script src="assets/admin-media.js?v=6"></script>
   <script src="assets/admin-newsletter.js?v=5"></script>

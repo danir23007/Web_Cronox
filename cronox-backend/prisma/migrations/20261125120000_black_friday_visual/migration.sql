@@ -1,0 +1,16 @@
+CREATE TABLE "BlackFridaySettings" (
+  "id" TEXT NOT NULL DEFAULT 'global',
+  "enabled" BOOLEAN NOT NULL DEFAULT false,
+  "title" TEXT NOT NULL DEFAULT 'BLACK FRIDAY',
+  "bannerText" TEXT NOT NULL DEFAULT 'BLACK FRIDAY ONLY IN BLACK FRIDAY · 27/11',
+  "startsAt" TIMESTAMPTZ(3) NOT NULL DEFAULT '2026-11-26 23:00:00+00',
+  "endsAt" TIMESTAMPTZ(3) NOT NULL DEFAULT '2026-11-27 23:00:00+00',
+  "eventText" TEXT NOT NULL DEFAULT 'BLACK FRIDAY YA ESTÁ AQUÍ',
+  "textColor" TEXT NOT NULL DEFAULT '#ffffff',
+  "backgroundColor" TEXT NOT NULL DEFAULT '#111111',
+  "revision" INTEGER NOT NULL DEFAULT 1,
+  "updatedBy" INTEGER,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "BlackFridaySettings_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "BlackFridaySettings_dates" CHECK ("endsAt" > "startsAt")
+);

@@ -294,7 +294,7 @@ describe('CRONOX responsive design system', () => {
     );
     expect(mobileGallery).not.toContain('grid-column: 1 / -1');
     expect(galleryStyles).toContain(
-      'height: calc(100dvh - var(--topbar-h, 64px) - env(safe-area-inset-top))',
+      'height: calc(100dvh - var(--header-stack-h,var(--topbar-h, 64px)) - env(safe-area-inset-top))',
     );
   });
 
@@ -349,19 +349,19 @@ describe('CRONOX responsive design system', () => {
 
   it('loads each modified stylesheet through its exact incremented cache version', () => {
     expect(readFrontend('assets/version.js')).toContain("VERSION = '99'");
-    expect(readFrontend('index.html')).toContain('assets/gallery.css?v=20');
+    expect(readFrontend('index.html')).toContain('assets/gallery.css?v=21');
     expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=12');
     expect(readFrontend('index.html')).toContain(
       'assets/product-detail.css?v=2',
     );
-    expect(readFrontend('gallery.html')).toContain('assets/info-page.css?v=4');
+    expect(readFrontend('gallery.html')).toContain('assets/info-page.css?v=5');
     expect(readFrontend('cart.html')).toMatch(/assets\/cart\.css\?v=\d+/);
     expect(readFrontend('checkout.html')).toContain('assets/checkout.css?v=31');
     expect(readFrontend('checkout-success.html')).toContain(
       'assets/checkout-success.css?v=3',
     );
     expect(readFrontend('producto.html')).toContain(
-      'assets/product-page.css?v=11',
+      'assets/product-page.css?v=12',
     );
   });
 });

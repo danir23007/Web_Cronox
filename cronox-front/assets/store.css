@@ -152,7 +152,7 @@ body.filters-open > .overlay{z-index:2100;}
 /* ===== Searchbar (flotante) ===== */
 .searchbar{
   position:fixed;
-  top:calc(var(--topbar-h) + env(safe-area-inset-top));
+  top:calc(var(--header-stack-h,var(--topbar-h)) + env(safe-area-inset-top));
   left:0;
   right:0;
   z-index:1400;
@@ -411,9 +411,9 @@ html.category-page #hero{display:none!important;}
 .web-offer-price{display:flex;align-items:baseline;justify-content:inherit;flex-wrap:wrap;gap:4px 10px;}
 .web-offer-price__previous{color:#aaa;font-weight:400;}
 .web-offer-price strong{color:#fff;font-weight:700;}
-#store,#contact{scroll-margin-top:calc(var(--topbar-h) + env(safe-area-inset-top) + 12px)}
-.store{padding:calc(40px + var(--topbar-h)) 16px 40px;background:#000;color:#fff;z-index:1;position:relative;}
-html.category-page .store{padding-top:calc(var(--topbar-h) + 24px);}
+#store,#contact{scroll-margin-top:calc(var(--header-stack-h,var(--topbar-h)) + env(safe-area-inset-top) + 12px)}
+.store{padding:calc(40px + var(--header-stack-h,var(--topbar-h))) 16px 40px;background:#000;color:#fff;z-index:1;position:relative;}
+html.category-page .store{padding-top:calc(var(--header-stack-h,var(--topbar-h)) + 24px);}
 html:not(.category-page) .page-home #hero + .store{padding-top:calc(20px + var(--topbar-h)*0.5);}
 @media (min-width:481px){
   html:not(.category-page) .page-home #hero + .store > .store-heading{margin-top:0.415em;}
@@ -422,15 +422,15 @@ html:not(.category-page) .page-home #hero + .store{padding-top:calc(20px + var(-
 @media (max-width:480px){
   html:not(.category-page) .hero-video-section{ margin-bottom:4px; }
   .store{
-    padding:calc(22px + var(--topbar-h)*0.25) 14px 30px;
+    padding:calc(22px + var(--header-stack-h,var(--topbar-h))*0.25) 14px 30px;
     margin-top:0;
   }
   .page-favorites .store{
-    padding-top:calc(var(--topbar-h) + 18px);
+    padding-top:calc(var(--header-stack-h,var(--topbar-h)) + 18px);
   }
   .store > .store-heading{ margin:0 0 20px; }
   html:not(.category-page) .page-home #hero + .store{padding-top:calc(11px + var(--topbar-h)*0.125);}
-  html.category-page .store{padding-top:calc(var(--topbar-h) + 18px);}
+  html.category-page .store{padding-top:calc(var(--header-stack-h,var(--topbar-h)) + 18px);}
 
   /* The header overlays the photo. Reserve 16px above the 29px heading and
      its 20px bottom margin; the first product row starts 1px off-screen. */

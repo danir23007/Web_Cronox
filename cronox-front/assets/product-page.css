@@ -118,7 +118,7 @@
      inset, gallery clearance, existing 32px title and 12px bottom breathing
      room. Shorter windows keep the gallery's natural height and scroll. */
   .page-product .pdp__grid {
-    min-height: calc(100svh - var(--topbar-h) - 32px - 36px - 32px - 12px);
+    min-height: calc(100svh - var(--header-stack-h,var(--topbar-h)) - 32px - 36px - 32px - 12px);
     align-items: start;
   }
   .page-product .pdp-related { margin-top: 0; padding-top: 36px; }

@@ -72,7 +72,7 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
       const html = readFrontend(route);
       const shellVersion = '4';
       expect(html).toMatch(/href="assets\/store\.css\?v=\d+"/);
-      expect(html).toContain('href="assets/info-page.css?v=4"');
+      expect(html).toContain('href="assets/info-page.css?v=5"');
       expect(
         html.match(
           new RegExp(`assets/info-shell\\.js\\?v=${shellVersion}`, 'g'),
@@ -133,7 +133,7 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
     expect(infoShellScript).not.toContain('topbar--transparent');
     expect(infoPageStyles).toContain('body.page-info');
     expect(infoPageStyles).toContain(
-      'padding-top: calc(var(--topbar-h, 64px) + env(safe-area-inset-top))',
+      'padding-top: calc(var(--header-stack-h,var(--topbar-h, 64px)) + env(safe-area-inset-top))',
     );
     expect(infoPageStyles).toContain('overflow-x: hidden');
     expect(infoPageStyles).toContain('background: #000');

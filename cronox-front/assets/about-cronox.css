@@ -1,7 +1,7 @@
 .page-about-cronox{--customer-original-font: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);}
 .page-about-cronox .topbar{background:#000;}
 .page-about-cronox .topbar__logo-img{display:block;width:140px;height:auto;}
-.brand-story{width:calc(100% - 40px);max-width:740px;margin:0 auto;padding:calc(var(--topbar-h,64px) + 64px) 0 80px;overflow-wrap:break-word;}
+.brand-story{width:calc(100% - 40px);max-width:740px;margin:0 auto;padding:calc(var(--header-stack-h,var(--topbar-h,64px)) + 64px) 0 80px;overflow-wrap:break-word;}
 .brand-story__eyebrow{font-size:12px;letter-spacing:.18em;color:#aaa;font-weight:600;margin:0 0 20px;}
 .brand-story h1{font-size:clamp(27px,4vw,44px);line-height:1.18;letter-spacing:-.025em;font-weight:700;margin:0;}
 .brand-story section{margin-top:48px;}
@@ -9,7 +9,7 @@
 .brand-story section p{font-size:17px;line-height:1.85;color:#dedede;margin:0 0 20px;text-align:left;}
 .brand-story section p:last-child{margin-bottom:0;}
 @media(max-width:600px){
-  .brand-story{padding-top:calc(var(--topbar-h,64px) + 36px);padding-bottom:56px;}
+  .brand-story{padding-top:calc(var(--header-stack-h,var(--topbar-h,64px)) + 36px);padding-bottom:56px;}
   .brand-story section{margin-top:36px;}
   .brand-story section p{font-size:16px;line-height:1.8;}
 }

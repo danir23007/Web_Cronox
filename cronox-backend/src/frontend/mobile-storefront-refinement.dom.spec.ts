@@ -85,7 +85,7 @@ describe('mobile storefront refinement', () => {
       'html:not(.category-page) .hero-video-section{ margin-bottom:4px; }',
     );
     expect(storeStyles).toContain(
-      'html.category-page .store{padding-top:calc(var(--topbar-h) + 18px);}',
+      'html.category-page .store{padding-top:calc(var(--header-stack-h,var(--topbar-h)) + 18px);}',
     );
     expect(storeStyles).toContain('height:100dvh');
   });

@@ -1189,6 +1189,21 @@ model AuthSession {
   @@index([lastActivityAt])
 }
 
+model BlackFridaySettings {
+  id              String   @id @default("global")
+  enabled         Boolean  @default(false)
+  title           String   @default("BLACK FRIDAY")
+  bannerText      String   @default("BLACK FRIDAY SOLO EN BLACK FRIDAY · 27/11 — DESDE EL 26/11 A LAS 21:00")
+  startsAt        DateTime @default(dbgenerated("'2026-11-26 20:00:00+00'::timestamptz")) @db.Timestamptz(3)
+  endsAt          DateTime @default(dbgenerated("'2026-11-27 23:00:00+00'::timestamptz")) @db.Timestamptz(3)
+  eventText       String   @default("BLACK FRIDAY YA ESTÁ AQUÍ")
+  textColor       String   @default("#ffffff")
+  backgroundColor String   @default("#111111")
+  revision        Int      @default(1)
+  updatedBy       Int?
+  updatedAt       DateTime @updatedAt
+}
+
 model KeyScreenSettings {
   id                String     @id @default("global")
   enabled           Boolean    @default(false)

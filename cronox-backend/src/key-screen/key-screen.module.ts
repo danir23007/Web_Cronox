@@ -8,11 +8,12 @@ import {
   PublicKeyScreenController,
 } from './key-screen.controller';
 import { KeyScreenService } from './key-screen.service';
+import { BlackFridayService, PublicBlackFridayController, AdminBlackFridayController } from './black-friday';
 
 @Module({
   imports: [EmailModule],
-  controllers: [PublicKeyScreenController, AdminKeyScreenController],
-  providers: [KeyScreenService, SupabaseStorageService, AdminGuard, RolesGuard],
+  controllers: [PublicKeyScreenController, AdminKeyScreenController, PublicBlackFridayController, AdminBlackFridayController],
+  providers: [KeyScreenService, BlackFridayService, SupabaseStorageService, AdminGuard, RolesGuard],
   exports: [KeyScreenService],
 })
 export class KeyScreenModule {}

@@ -57,7 +57,7 @@ describe('category storefront chrome', () => {
     );
     expect(css).toContain('html.category-page #hero{display:none!important;}');
     expect(css).toContain(
-      'html.category-page .store{padding-top:calc(var(--topbar-h) + 24px);}',
+      'html.category-page .store{padding-top:calc(var(--header-stack-h,var(--topbar-h)) + 24px);}',
     );
   });
 });

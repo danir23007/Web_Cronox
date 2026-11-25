@@ -21,10 +21,10 @@
     .topbar__logo-img { display: block; width: 140px; height: auto; }
     .topbar svg { width: 24px; height: 24px; }
   </style>
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=132">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=133">
   <link rel="stylesheet" href="assets/quick-add.css?v=12">
   <!-- PDP oscuro total -->
-  <link rel="stylesheet" href="assets/product-page.css?v=11" />
+  <link rel="stylesheet" href="assets/product-page.css?v=12" />
 
   <style>
     /* ===== PDP FINAL — FONDO NEGRO, BLOQUES BLANCOS, SIN ESQUINAS ===== */
@@ -38,7 +38,7 @@
       --customer-original-font: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial; font-family:var(--customer-font-prefix,) var(--customer-original-font);
     }
 
-    body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
+    body { padding-top: calc(var(--header-stack-h,var(--topbar-h)) + env(safe-area-inset-top)); }
 
     /* PDP layout */
     main.pdp {
@@ -345,6 +345,7 @@
   <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="/assets/customer-layout.css?v=1">
   <link rel="stylesheet" href="assets/waitlist.css?v=4">
+  <link rel="stylesheet" href="/assets/black-friday.css?v=2">
 </head>
 <!-- [AUTH] Modal de login/registro -->
 <div id="authOverlay" class="auth-overlay auth-hidden">
@@ -619,5 +620,6 @@
   <script src="assets/products.js?v=78" defer></script>
   <script src="assets/product-page.js?v=55" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
+  <script defer src="/assets/black-friday.js?v=2"></script>
 </body>
 </html>
