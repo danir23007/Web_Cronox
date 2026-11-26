@@ -52,6 +52,13 @@
   quoteStatus.setAttribute('role', 'status');
   quoteStatus.hidden = true;
   shippingOptionsEl?.after(quoteStatus);
+  const promoNotice = document.createElement('p');
+  promoNotice.className = 'cart-status';
+  promoNotice.setAttribute('role', 'status');
+  promoNotice.setAttribute('aria-live', 'polite');
+  promoNotice.hidden = true;
+  quoteStatus.after(promoNotice);
+  let promoPolicyTimer = null;
   const renderShipping = (methods) => {
     if (!shippingOptionsEl) return;
     const current = Array.from(shippingOptionsEl.querySelectorAll('input')).map(input => input.value);
@@ -86,6 +93,15 @@
       const quote = await API.getCheckoutSummary({ shippingMethod: state.shippingMethod });
       if (revision !== state.quoteRevision) return;
       state.quote = quote;
+      const policy = quote.promoPolicy;
+      if (policy) {
+        window.clearTimeout(promoPolicyTimer);
+        promoNotice.hidden = !policy.blocked;
+        promoNotice.textContent = policy.blocked ? policy.message : '';
+        if (policy.blocked) sessionStorage.removeItem('cronox_checkout_promo');
+        const delay = Date.parse(policy.blocked ? policy.endsAt : policy.startsAt) - Date.parse(policy.serverNow);
+        if (delay > 0 && delay < 2147483000) promoPolicyTimer = window.setTimeout(() => { state.quoteKey = ''; void refreshQuote(); }, delay + 50);
+      }
       state.shippingMethod = quote.selectedShippingMethod?.code || '';
       state.quoteKey = JSON.stringify([state.shippingMethod, state.cart.subtotalCents, state.cart.items.map(item => [item.id, item.qty, item.priceCents])]);
       renderShipping(quote.shippingMethods || []);
@@ -333,6 +349,9 @@
   else init();
 
   window.addEventListener('cart:state', renderCart);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { state.quoteKey = ''; void refreshQuote(); }
+  });
 
   window.addEventListener('cart:updated', (event) => {
     const cart = event?.detail;

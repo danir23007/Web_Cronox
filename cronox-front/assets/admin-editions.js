@@ -126,7 +126,9 @@
       const result=await request('/'+lotId,body,pendingSave.key);
       if(version!==loading)return true;
       data=result;pendingSave=null;
-      await show(selectedId); tell('Cambios guardados en el lote '+selected().number+'.');return true;
+      try { await show(selectedId); }
+      catch (error) { error.productSaved = true; throw error; }
+      tell('Cambios guardados en el lote '+selected().number+'.');return true;
     },
   };
 })();

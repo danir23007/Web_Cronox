@@ -24,6 +24,7 @@ import {
 } from './orders.service';
 import { ApplyPromoDto } from './dto/apply-promo.dto';
 import { normalizeCountry, UNSUPPORTED_COUNTRY_MESSAGE } from '../common/country';
+import { BLACK_FRIDAY_PROMO_MESSAGE } from '../common/black-friday-discounts';
 
 @ApiTags('Checkout')
 @Controller('checkout')
@@ -119,7 +120,7 @@ export class CheckoutSummaryController {
       const isAlreadyRedeemed =
         promoMessage === PROMO_ALREADY_REDEEMED_MESSAGE;
       throw new BadRequestException({
-        code: isNotFound
+        code: promoMessage === BLACK_FRIDAY_PROMO_MESSAGE ? 'PROMO_BLACK_FRIDAY' : isNotFound
           ? 'PROMO_NOT_FOUND'
           : isAlreadyRedeemed
             ? 'PROMO_ALREADY_REDEEMED'

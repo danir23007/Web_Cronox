@@ -111,6 +111,15 @@
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       const error = new Error(typeof payload?.message === 'string' ? payload.message : 'No se pudo confirmar la reserva.');
+      if (payload?.code === 'PROMO_BLACK_FRIDAY') {
+        setPromoState(null);
+        setPromoStatus('');
+        setPromoMessage(payload.message, true);
+        renderPromoUI();
+        window.setTimeout(() => {
+          if (!checkoutReservation?.current()?.paymentStartedAt) void queueCheckoutUpdate();
+        }, 0);
+      }
       error.code = payload?.code || payload?.message; error.items = payload?.items; throw error;
     }
     return payload;
@@ -639,6 +648,31 @@
     if (!promoStatus) return;
     promoStatus.textContent = text || '';
     promoStatus.hidden = !text;
+  };
+
+  let promoPolicyTimer = null;
+  let promoPolicyBlocked = false;
+  const applyServerPromoPolicy = (policy) => {
+    if (!policy) return;
+    window.clearTimeout(promoPolicyTimer);
+    const wasBlocked = promoPolicyBlocked;
+    promoPolicyBlocked = policy.blocked === true;
+    if (promoPolicyBlocked) {
+      if (state.promo?.code && promoInput) promoInput.value = '';
+      setPromoState(null);
+      setPromoStatus('');
+      setPromoMessage(policy.message, true);
+    } else if (wasBlocked) {
+      setPromoMessage('');
+    }
+    // Dates/clock come from the server. This timer only requests revalidation;
+    // all monetary decisions remain on the server, including background tabs.
+    const boundary = Date.parse(policy.blocked ? policy.endsAt : policy.startsAt);
+    const delay = boundary - Date.parse(policy.serverNow);
+    if (delay > 0 && delay < 2147483000) promoPolicyTimer = window.setTimeout(() => {
+      if (paymentInFlight || checkoutReservation?.current()?.paymentStartedAt) void checkoutReservation?.heartbeat();
+      else void queueCheckoutUpdate();
+    }, delay + 50);
   };
 
   const setPromoControlsLoading = (loading) => {
@@ -1741,10 +1775,12 @@
         });
         setPromoStatus('Código aplicado');
         setPromoMessage(appliedPromo.message || '');
-      } else if (state.promo?.code && state.promo.code !== appliedPromo?.code) {
+      } else if (state.promo?.code && !appliedPromo?.valid) {
         setPromoState(null);
+        setPromoStatus('');
         setPromoMessage(appliedPromo?.message || 'Código inválido o expirado', true);
       }
+      applyServerPromoPolicy(data.promoPolicy);
 
       if (!state.cart?.items?.length) {
         renderEmptyCart();
@@ -1911,6 +1947,7 @@
       if (!response.ok || !isCurrentExpressSession(session) || sequence !== session.sequence ||
         data.selectedShippingMethod?.code !== rateId) throw new Error('EXPRESS_QUOTE_REJECTED');
       state.shippingMethods = data.shippingMethods;
+      applyServerPromoPolicy(data.promoPolicy);
       state.shippingMethod = data.selectedShippingMethod.code;
       state.totals = data.totals;
       state.cart = data.cart;
@@ -2635,6 +2672,16 @@
         setPromoMessage('Ya has utilizado este código de descuento.', true);
         renderPromoUI();
       }
+      if (details.code === 'PROMO_BLACK_FRIDAY') {
+        setPromoState(null);
+        setPromoStatus('');
+        setPromoMessage(error.payload.message, true);
+        renderPromoUI();
+        if (!checkoutReservation?.current()?.paymentStartedAt) await fetchCheckoutSummary(state.shippingMethod, revision);
+        setPreparationRetry(true);
+        errorDiv.textContent = error.payload.message;
+        return false;
+      }
       errorDiv.textContent = getPaymentPreparationMessage(details);
       // Recovery reuses the server's idempotent preparation path. Explicitly
       // unresolved provider states remain locked for reconciliation instead.
@@ -3276,6 +3323,10 @@
     if (typeof ref !== 'string' || !/^pi_[A-Za-z0-9_]+$/.test(ref)) return;
     newsletterPurchaseReference = ref;
     void subscribeNewsletterIfRequested().then(rememberNewsletterCompletion);
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !paymentInFlight && !checkoutReservation?.current()?.paymentStartedAt) void queueCheckoutUpdate();
   });
 
   window.addEventListener('cronox:bank-transfer-lock', (event) => {

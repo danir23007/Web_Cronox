@@ -1,4 +1,5 @@
 import { lockWelcomeBenefit, recordWelcomePurchase } from '../users/welcome-benefit';
+import { blackFridayDiscountPolicy, BlackFridayDiscountPolicy, BLACK_FRIDAY_PROMO_MESSAGE, hasSnapshotPromo, promoDeadline } from '../common/black-friday-discounts';
 import { resolveWebPrice, WebOffer } from '../products/web-offer';
 // [ORDERS] Lógica de negocio para checkout y pedidos
 import { allocateLots, consumeLots, returnLots } from '../inventory-lots/lot-ledger';
@@ -222,6 +223,7 @@ type CheckoutTotals = {
 type CheckoutShippingMethod = ShippingMethodOption & { priceCents: number };
 
 type CheckoutSummary = {
+  promoPolicy?: BlackFridayDiscountPolicy;
   cart: CartSnapshot | null;
   currency: string;
   shippingMethods: CheckoutShippingMethod[];
@@ -254,6 +256,14 @@ type PromoApplication = {
 
 @Injectable()
 export class OrdersService {
+  private blockedPromoSnapshots(policy: BlackFridayDiscountPolicy): Prisma.CheckoutSnapshotWhereInput[] {
+    return policy.blocked ? [{ OR: [{ promoCodeId: { not: null } }, { promoCodeCode: { not: null } }, { discountCents: { gt: 0 } }] }] : [];
+  }
+
+  private async assertSnapshotPromoAllowed(snapshot: { promoCodeId?: number | null; promoCodeCode?: string | null; discountCents?: number }, client: any = this.prisma) {
+    if (hasSnapshotPromo(snapshot) && (await blackFridayDiscountPolicy(client)).blocked)
+      throw new ConflictException({ code: 'PROMO_BLACK_FRIDAY', message: BLACK_FRIDAY_PROMO_MESSAGE });
+  }
   private readonly logger = new Logger(OrdersService.name);
   private readonly allowNegativeStock =
     process.env.ALLOW_NEGATIVE_STOCK === 'true'; // [STOCK]
@@ -388,6 +398,8 @@ export class OrdersService {
       shippingMethods.splice(0, shippingMethods.length, ...methodsForTotals);
     }
 
+    const promoPolicy = await blackFridayDiscountPolicy(this.prisma);
+    if (promoPolicy.blocked && appliedPromo?.valid) return this.getCheckoutSummary(cart, params);
     return {
       cart,
       currency,
@@ -395,6 +407,7 @@ export class OrdersService {
       selectedShippingMethod,
       totals,
       appliedPromo,
+      promoPolicy,
     };
   }
 
@@ -513,6 +526,7 @@ export class OrdersService {
       },
       { cart: options.cart },
     ); // [STRIPE]
+    if (preview.appliedPromo?.message === BLACK_FRIDAY_PROMO_MESSAGE || (dto.couponCode && (await blackFridayDiscountPolicy(this.prisma)).blocked)) throw new BadRequestException({ code: 'PROMO_BLACK_FRIDAY', message: BLACK_FRIDAY_PROMO_MESSAGE });
     const provider = this.taxConfig.getPaymentProvider();
 
     const metadata: Record<string, unknown> = { ...preview.metadata };
@@ -599,7 +613,10 @@ export class OrdersService {
     // or empties the cart. Preparation/retries must never replace that attempt.
     if (options.cart) {
       const protectedSnapshot = await this.findActiveCheckoutSnapshot(resolvedOwner, options.cart.id, options.transaction);
-      if (protectedSnapshot?.paymentStartedAt) return this.buildCheckoutSnapshotResponse(protectedSnapshot, new Date(), true);
+      if (protectedSnapshot?.paymentStartedAt) {
+        await this.assertSnapshotPromoAllowed(protectedSnapshot, options.transaction);
+        return this.buildCheckoutSnapshotResponse(protectedSnapshot, new Date(), true);
+      }
     }
     const preview = resolvedOwner.userId != null
       ? await this.getCheckoutPreview(
@@ -623,7 +640,7 @@ export class OrdersService {
       const message =
         preview.appliedPromo?.message ?? 'Código inválido o expirado';
       throw new BadRequestException({
-        code:
+        code: message === BLACK_FRIDAY_PROMO_MESSAGE ? 'PROMO_BLACK_FRIDAY' :
           message === PROMO_ALREADY_REDEEMED_MESSAGE
             ? 'PROMO_ALREADY_REDEEMED'
             : 'PROMO_INVALID',
@@ -648,6 +665,7 @@ export class OrdersService {
     );
 
     if (existing) {
+      await this.assertSnapshotPromoAllowed(existing, options.transaction);
       if (options.presenceOnly) return this.buildCheckoutSnapshotResponse(existing, new Date(), true);
       return this.reuseActiveCheckoutSnapshot(
         existing,
@@ -693,6 +711,7 @@ export class OrdersService {
           include: { items: true },
         });
         if (competing) {
+          await this.assertSnapshotPromoAllowed(competing, tx);
           return this.reuseActiveCheckoutSnapshot(
             competing,
             requestFingerprint,
@@ -701,6 +720,7 @@ export class OrdersService {
         }
 
         if (preview.appliedPromo?.promoId) {
+          if ((await blackFridayDiscountPolicy(tx)).blocked) throw new BadRequestException({ code: 'PROMO_BLACK_FRIDAY', message: BLACK_FRIDAY_PROMO_MESSAGE });
           await lockWelcomeBenefit(tx, resolvedOwner.customerEmail);
           const promo = await tx.promoCode.findUniqueOrThrow({ where: { id: preview.appliedPromo.promoId } });
           const valid = await this.validatePromoAvailability(promo, { userId: resolvedOwner.userId ?? undefined, customerEmail: resolvedOwner.customerEmail, client: tx });
@@ -752,7 +772,7 @@ export class OrdersService {
             totalCents: preview.totals.totalCents,
             shippingAddr: this.toInputJsonValue(params.shippingAddress),
             billingAddr: this.toInputJsonValue(params.billingAddress),
-            expiresAt: presenceExpiry,
+            expiresAt: promoDeadline(presenceExpiry, Boolean(preview.appliedPromo?.promoId), await blackFridayDiscountPolicy(tx)),
             items: {
               create: preview.computation.lineItems.map((item) => ({
                 productId: item.productId,
@@ -1186,7 +1206,9 @@ export class OrdersService {
         await tx.checkoutPresence.upsert({ where: key, create: { cartId, tabId, expiresAt }, update: { expiresAt } });
       }
       const latest = await tx.checkoutPresence.aggregate({ where: { cartId, expiresAt: { gt: now } }, _max: { expiresAt: true } });
-      const updated = await tx.checkoutSnapshot.update({ where: { id: snapshot.id }, data: { expiresAt: latest._max.expiresAt ?? now }, include: { items: true } });
+      const updated = await tx.checkoutSnapshot.update({ where: { id: snapshot.id }, data: {
+        expiresAt: promoDeadline(latest._max.expiresAt ?? now, hasSnapshotPromo(snapshot), await blackFridayDiscountPolicy(tx)),
+      }, include: { items: true } });
       return this.reservationResponse(updated, tx);
     });
   }
@@ -1195,7 +1217,9 @@ export class OrdersService {
     const snapshot = await this.prisma.checkoutSnapshot.findFirst({ where: {
       id: snapshotId, cartId, ...this.snapshotOwnerWhere(owner), status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
     } });
-    if (!snapshot || snapshot.reservationPhase === 'RECONCILING' || snapshot.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
+    if (!snapshot || snapshot.reservationPhase === 'RECONCILING') throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
+    await this.assertSnapshotPromoAllowed(snapshot);
+    if (snapshot.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
     if (snapshot.paymentStartedAt) return;
     const lease = await this.prisma.checkoutPresence.findUnique({ where: { cartId_tabId: { cartId, tabId } } });
     if (!lease || lease.departedAt || lease.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_PRESENCE_REQUIRED');
@@ -1207,7 +1231,9 @@ export class OrdersService {
       if (!locked.count) throw new ForbiddenException('CHECKOUT_ACCESS_DENIED');
       const snapshot = await tx.checkoutSnapshot.findUniqueOrThrow({ where: { id: snapshotId }, include: { items: true } });
       const now = new Date();
-      if (snapshot.stripePaymentIntentId !== paymentIntentId || snapshot.reservationPhase === 'RECONCILING' || !['PAYMENT_BOUND', 'BANK_TRANSFER_PENDING'].includes(snapshot.status) || snapshot.expiresAt <= now) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
+      if (snapshot.stripePaymentIntentId !== paymentIntentId || snapshot.reservationPhase === 'RECONCILING' || !['PAYMENT_BOUND', 'BANK_TRANSFER_PENDING'].includes(snapshot.status)) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
+      await this.assertSnapshotPromoAllowed(snapshot, tx);
+      if (snapshot.expiresAt <= now) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
       if (snapshot.paymentStartedAt) return this.reservationResponse(snapshot, tx);
       const lease = await tx.checkoutPresence.findUnique({ where: { cartId_tabId: { cartId, tabId } } });
       if (!lease || lease.departedAt || lease.expiresAt <= now) throw new ConflictException('CHECKOUT_PRESENCE_REQUIRED');
@@ -1219,16 +1245,17 @@ export class OrdersService {
       const address = snapshot.shippingAddr as Record<string, unknown> | null;
       if (!address?.firstName || !address.lastName || !address.line1 || !address.city || !address.country || !/^[0-9]{5}$/.test(String(address.postalCode || ''))) throw new BadRequestException('CHECKOUT_SHIPPING_ADDRESS_REQUIRED');
       const protectedSnapshot = await tx.checkoutSnapshot.update({ where: { id: snapshot.id }, data: {
-        reservationPhase: 'PROTECTED', paymentStartedAt: now, expiresAt: new Date(now.getTime() + CHECKOUT_PAYMENT_WINDOW_MS),
+        reservationPhase: 'PROTECTED', paymentStartedAt: now, expiresAt: promoDeadline(new Date(now.getTime() + CHECKOUT_PAYMENT_WINDOW_MS), hasSnapshotPromo(snapshot), await blackFridayDiscountPolicy(tx)),
       }, include: { items: true } });
       return this.reservationResponse(protectedSnapshot, tx);
     });
   }
 
   async claimCheckoutExpiry(id: string) {
+    const policy = await blackFridayDiscountPolicy(this.prisma);
     return this.prisma.$transaction(async tx => {
       const claimed = await tx.checkoutSnapshot.updateMany({ where: {
-        id, expiresAt: { lte: new Date() }, status: { in: EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES },
+        id, AND: [{ OR: [{ expiresAt: { lte: new Date() } }, ...this.blockedPromoSnapshots(policy)] }], status: { in: EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES },
         OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
       }, data: { reservationPhase: 'RECONCILING' } });
       return claimed.count ? tx.checkoutSnapshot.findUnique({ where: { id }, include: { items: true } }) : null;
@@ -1250,6 +1277,7 @@ export class OrdersService {
       await tx.checkoutSnapshot.update({ where: { id: checkoutSnapshotId }, data: { updatedAt: new Date() } });
       const snapshot = await tx.checkoutSnapshot.findUnique({ where: { id: checkoutSnapshotId }, include: { items: true } });
       if (!snapshot || snapshot.stripePaymentIntentId !== paymentIntentId) throw new ConflictException('STRIPE_PAYMENT_SNAPSHOT_MISMATCH');
+      await this.assertSnapshotPromoAllowed(snapshot, tx);
       if (snapshot.status === 'BANK_TRANSFER_PENDING') return snapshot;
       if (snapshot.status !== 'PAYMENT_BOUND' || snapshot.orderId || snapshot.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_NOT_AVAILABLE_FOR_BANK_TRANSFER');
       const admission = await admitBankReservation(tx, snapshot, network);
@@ -1289,7 +1317,7 @@ export class OrdersService {
         // Never renew it when retrieving/retrying bank instructions.
         reservationPhase: 'PROTECTED',
         paymentStartedAt: snapshot.paymentStartedAt ?? now,
-        expiresAt: snapshot.paymentStartedAt ? snapshot.expiresAt : new Date(now.getTime() + CHECKOUT_PAYMENT_WINDOW_MS),
+        expiresAt: promoDeadline(snapshot.paymentStartedAt ? snapshot.expiresAt : new Date(now.getTime() + CHECKOUT_PAYMENT_WINDOW_MS), hasSnapshotPromo(snapshot), await blackFridayDiscountPolicy(tx)),
       }, include: { items: true } });
     });
   }
@@ -1356,11 +1384,14 @@ export class OrdersService {
   async listExpiredCheckoutSnapshots(
     limit = 100,
   ): Promise<Array<{ id: string; stripePaymentIntentId: string | null }>> {
+    const policy = await blackFridayDiscountPolicy(this.prisma);
     return this.prisma.checkoutSnapshot.findMany({
       where: {
         OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
-        expiresAt: { lte: new Date() },
-        AND: [{ OR: [{ reservationRetryAt: null }, { reservationRetryAt: { lte: new Date() } }] }],
+        AND: [
+          { OR: [{ expiresAt: { lte: new Date() } }, ...this.blockedPromoSnapshots(policy)] },
+          { OR: [{ reservationRetryAt: null }, { reservationRetryAt: { lte: new Date() } }] },
+        ],
         status: { in: EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES },
       },
       orderBy: { expiresAt: 'asc' },
@@ -2931,6 +2962,10 @@ export class OrdersService {
     const itemsTotalCents = baseTotals.subtotalCents;
     const shippingCents = baseTotals.shippingCents;
     const totalBeforeCents = Math.max(0, itemsTotalCents + shippingCents);
+    if ((await blackFridayDiscountPolicy(client)).blocked) return {
+      valid: false, code: code || undefined, discountCents: 0, totalBeforeCents, totalAfterCents: totalBeforeCents,
+      message: BLACK_FRIDAY_PROMO_MESSAGE,
+    };
 
     if (!code) {
       return {

@@ -2005,6 +2005,7 @@ import { loadCategoryPages } from './category-pagination';
       selectedShippingMethod,
       totals,
       appliedPromo: data?.appliedPromo ?? null,
+      promoPolicy: data?.promoPolicy ?? null,
     };
   };
 

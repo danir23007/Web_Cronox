@@ -2949,9 +2949,9 @@
       return;
     }
     if (setUiLoading) setUiLoading(productsBody, true, { title: 'Cargando productos…', colSpan: getProductsColumnCount() });
-    if (productsMessage) productsMessage.innerHTML = '';
+    setScopedMessage(productsMessage, '');
     try {
-      const data = await window.CRONOX_API?.admin?.listAdminProducts(
+      const data = await window.CRONOX_API.admin.listAdminProducts(
         { ...buildProductQuery(productsState), view: 'summary' },
       );
       const meta = normalizePaginated(data, productsState);
@@ -2976,6 +2976,7 @@
         next: productsNext,
       });
       window.CRONOX_BULK?.page('products', meta.items || [], meta.totalItems);
+      return true;
     } catch (error) {
       console.error('[ADMIN] Error cargando productos', error);
       if (loadVersion !== productsLoadVersion) return;
@@ -2992,6 +2993,7 @@
         actions: [{ label: 'Reintentar', onClick: fetchProducts, variant: 'primary' }],
         colSpan: getProductsColumnCount(),
       });
+      return false;
     }
   };
 
@@ -3536,7 +3538,7 @@
 
     let imageUrls = [];
     const files = productImagesInput?.files ? Array.from(productImagesInput.files) : [];
-
+    let saveConfirmed = false;
     try {
       if (editingProductId && window.CRONOX_EDITIONS?.selected() && typeof window.CRONOX_PRODUCT_GALLERY?.serialize !== 'function') throw new Error('No se pudo cargar la galería. Recarga el editor antes de guardar para conservar sus imágenes.');
       const imageValidationMessage = validateProductImages(files);
@@ -3567,26 +3569,34 @@
       }
 
       if (editingProductId) {
-        if (window.CRONOX_EDITIONS?.selected()) { await window.CRONOX_EDITIONS.save(payload); await fetchProducts(); return true; }
-        await window.CRONOX_API?.admin?.updateAdminProduct(editingProductId, payload);
-        setScopedMessage(productsMessage, 'Producto actualizado correctamente.', 'success');
+        if (window.CRONOX_EDITIONS?.selected()) {
+          if (await window.CRONOX_EDITIONS.save(payload) !== true) return false;
+          saveConfirmed = true;
+          const refreshed = await fetchProducts();
+          setScopedMessage(productsMessage, refreshed ? 'Producto actualizado correctamente.' : 'Producto actualizado correctamente. No se pudo actualizar la lista; vuelve a cargarla.', refreshed ? 'success' : 'error');
+          return true;
+        }
+        await window.CRONOX_API.admin.updateAdminProduct(editingProductId, payload);
       } else {
         if (!productCreateIdempotencyKey) {
           productCreateIdempotencyKey = window.crypto?.randomUUID?.() ||
             `product-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         }
-        await window.CRONOX_API?.admin?.createAdminProduct(payload, productCreateIdempotencyKey);
-        setScopedMessage(productsMessage, 'Producto creado correctamente.', 'success');
+        await window.CRONOX_API.admin.createAdminProduct(payload, productCreateIdempotencyKey);
       }
-
+      saveConfirmed = true;
+      const savedMessage = editingProductId ? 'Producto actualizado correctamente.' : 'Producto creado correctamente.';
       window.CRONOX_ADMIN_SHELL?.clear(productForm);
       toggleModal(productModal, false);
-      await fetchProducts();
+      const refreshed = await fetchProducts();
+      setScopedMessage(productsMessage, refreshed ? savedMessage : `${savedMessage} No se pudo actualizar la lista; vuelve a cargarla.`, refreshed ? 'success' : 'error');
+      return true;
     } catch (error) {
       console.error('[ADMIN] Error guardando producto', error);
-      const message = error?.payload?.message || error?.message || 'No se pudo guardar el producto.';
+      if (error?.productSaved) saveConfirmed = true;
+      const message = saveConfirmed ? 'El producto se ha guardado, pero no se pudo actualizar la lista. Vuelve a cargarla.' : error?.payload?.message || error?.message || 'No se pudo guardar el producto.';
       setScopedMessage(productsMessage, message, 'error');
-      if (formMessage) { formMessage.textContent = Array.isArray(message) ? message.join(' ') : message; formMessage.hidden = false; }
+      if (formMessage && !saveConfirmed) { formMessage.textContent = Array.isArray(message) ? message.join(' ') : message; formMessage.hidden = false; }
     } finally {
       window.CRONOX_EDITIONS?.setSaving(false);
       if (productModal?.classList.contains('show')) {

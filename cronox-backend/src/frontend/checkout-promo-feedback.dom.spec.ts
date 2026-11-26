@@ -12,7 +12,9 @@ function setup() {
   const method = { code: 'STANDARD', label: 'Envío estándar', priceCents: 490, amountCents: 490 };
   const cart = { items: [{ id: 1, qty: 1, priceCents: 5000, product: { name: 'Fixture' } }], subtotalCents: 5000, itemsCount: 1 };
   let promo: any = null;
-  const totals = () => ({ subtotalCents: 5000, discountCents: promo ? 500 : 0, shippingCents: 490, totalCents: promo ? 4990 : 5490 });
+  let blocked = false;
+  const blockMessage = 'Los códigos de descuento no son acumulables con las ofertas de Black Friday.';
+  const totals = (requested = Boolean(promo)) => ({ subtotalCents: 5000, discountCents: requested && promo && !blocked ? 500 : 0, shippingCents: 490, totalCents: requested && promo && !blocked ? 4990 : 5490 });
   w.scrollTo = () => {};
   w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   w.fetch = async () => ({ ok: true, json: async () => ({}) });
@@ -21,7 +23,9 @@ function setup() {
   w.CRONOX_CHECKOUT_LOADING = { finish: jest.fn() };
   w.CRONOX_API = {
     getMe: async () => null, getProducts: async () => [], getCsrfHeaders: async () => ({}),
-    getCheckoutSummary: async ({ promoCode }: any) => ({ cart, shippingMethods: [method], selectedShippingMethod: method, totals: totals(), appliedPromo: promoCode && promo ? promo : null }),
+    getCheckoutSummary: async ({ promoCode }: any) => ({ cart, shippingMethods: [method], selectedShippingMethod: method, totals: totals(Boolean(promoCode)),
+      appliedPromo: promoCode ? blocked ? { valid: false, code: promoCode, discountCents: 0, message: blockMessage } : promo : null,
+      promoPolicy: blocked ? { blocked: true, message: blockMessage, startsAt: '2026-11-26T20:00:00Z', endsAt: '2026-11-27T23:00:00Z', serverNow: '2026-11-26T21:00:00Z' } : { blocked: false } }),
     applyPromoCode: jest.fn(async ({ code }: any) => {
       promo = { valid: true, code, discountCents: 500 };
       return { ...promo, discountAmount: 500, totals: totals(), shippingMethod: method };
@@ -29,7 +33,7 @@ function setup() {
   };
   w.eval(read('assets/checkout-lifecycle.js'));
   w.eval(read('assets/checkout.js'));
-  return { dom, w, submit: async (code: string) => {
+  return { dom, w, block: (value: boolean) => { blocked = value; }, submit: async (code: string) => {
     const input = w.document.getElementById('promo-code-input');
     input.value = code;
     input.dispatchEvent(new w.Event('input', { bubbles: true }));
@@ -39,6 +43,23 @@ function setup() {
 }
 
 describe('checkout promo feedback', () => {
+  it('removes a same-code rejection at Black Friday, clears session recovery and never reapplies it after the end', async () => {
+    const { dom, w, submit, block } = setup();
+    try {
+      await settle(); await submit('SAVE');
+      expect(w.document.getElementById('summary-total').textContent).toContain('49,90');
+      expect(w.sessionStorage.getItem('cronox_checkout_promo')).not.toBeNull();
+      block(true);
+      Object.defineProperty(w.document, 'visibilityState', { configurable: true, value: 'visible' });
+      w.document.dispatchEvent(new w.Event('visibilitychange')); await settle();
+      expect(w.document.getElementById('promo-message').textContent).toBe('Los códigos de descuento no son acumulables con las ofertas de Black Friday.');
+      expect(w.document.getElementById('summary-total').textContent).toContain('54,90');
+      expect(w.sessionStorage.getItem('cronox_checkout_promo')).toBeNull();
+      block(false); w.document.dispatchEvent(new w.Event('visibilitychange')); await settle();
+      expect(w.document.getElementById('summary-total').textContent).toContain('54,90');
+      expect(w.document.getElementById('promo-message').textContent).toBe('');
+    } finally { dom.window.close(); }
+  });
   it.each([
     'Este código de descuento no existe', 'El código ha caducado',
     'Ya has utilizado este código de descuento.', 'Este código pertenece a otra cuenta',
