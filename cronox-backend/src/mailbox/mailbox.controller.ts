@@ -41,6 +41,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  Matches,
   Min,
   ValidateNested,
   ArrayMaxSize,
@@ -129,11 +130,11 @@ class CampaignDto extends SendDto {
   @IsOptional() @IsString() @MaxLength(16) localDate?: string;
   @IsOptional() @IsIn(['+01:00', '+02:00']) offset?: string;
 }
-class SaveCampaignSelectionDto extends SaveDraftDto {
-  @IsOptional() @IsUUID() draftId?: string;
+export class SaveCampaignSelectionDto extends SaveDraftDto {
+  @IsOptional() @IsString({ message: 'MAILBOX_INVALID_DRAFT_ID' }) @MaxLength(100, { message: 'MAILBOX_INVALID_DRAFT_ID' }) @Matches(/^[A-Za-z0-9][A-Za-z0-9:_-]{0,99}$/, { message: 'MAILBOX_INVALID_DRAFT_ID' }) draftId?: string;
 }
-class SendCampaignSelectionDto extends CampaignDto {
-  @IsOptional() @IsUUID() draftId?: string;
+export class SendCampaignSelectionDto extends CampaignDto {
+  @IsOptional() @IsString({ message: 'MAILBOX_INVALID_DRAFT_ID' }) @MaxLength(100, { message: 'MAILBOX_INVALID_DRAFT_ID' }) @Matches(/^[A-Za-z0-9][A-Za-z0-9:_-]{0,99}$/, { message: 'MAILBOX_INVALID_DRAFT_ID' }) draftId?: string;
   @IsOptional() @IsString() @MaxLength(160) campaignName?: string;
   @IsOptional() @IsString() @MaxLength(100) familyId?: string;
   @IsOptional() @IsInt() @Min(1) variantId?: number;
@@ -225,7 +226,8 @@ export class MailboxErrorFilter implements ExceptionFilter {
             ? 409
             : 503;
     const raw = error instanceof HttpException ? error.getResponse() : null;
-    const code = raw && typeof raw === 'object' ? (raw as any).message : raw;
+    const rawCode = raw && typeof raw === 'object' ? (raw as any).message : raw;
+    const code = Array.isArray(rawCode) && rawCode.includes('MAILBOX_INVALID_DRAFT_ID') ? 'MAILBOX_INVALID_DRAFT_ID' : rawCode;
     res.status(status).json({
       statusCode: status,
       ...(code === 'MAILBOX_CAMPAIGN_BLOCKED' &&

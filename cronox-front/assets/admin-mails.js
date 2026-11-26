@@ -23,7 +23,7 @@
       ).join('') + '</div></section>' +
       '<section aria-labelledby="mailPublicationTitle"><h4 id="mailPublicationTitle">Estado de publicación</h4>' +
       '<div class="mail-guide-states"><div><span class="mail-template-state is-draft">○ Borrador</span><p>Puedes editar la plantilla, previsualizarla y enviarte una prueba. Los envíos automáticos siguen usando la última versión publicada o, si todavía no hay ninguna, la plantilla de reserva.</p></div>' +
-      '<div><span class="mail-template-state is-published">● Publicado</span><p>Los próximos correos automáticos de ese tipo usan la versión publicada. Si haces cambios después, debes volver a pulsar «Publicar» para aplicarlos.</p></div></div></section></aside>';
+      '<div><span class="mail-template-state is-published">● Publicado</span><p>Las automatizaciones y las campañas manuales confirmadas utilizan la versión publicada que les corresponde. Si haces cambios después, debes volver a pulsar «Publicar» para aplicarlos.</p></div></div></section></aside>';
   }
   function classificationSelector(current) {
     return '<fieldset class="mail-classification"><legend>Clasificación visual</legend><p>Solo organiza las tarjetas; no cambia el contenido, los destinatarios ni las automatizaciones.</p><div class="mail-classification-options">' +
@@ -556,6 +556,7 @@
   function purposeInformation() {
     if (state.signatureEditor) return '';
     const purpose = state.current.purpose;
+    if (!purpose && state.current.familyId && state.current.campaignCircle) return '<p>Campaña manual · Círculo ' + esc(state.current.campaignCircle) + '.</p><p>Esta versión pertenece a una familia de campañas de Información y no necesita una finalidad automática. Se utilizará al revisar y confirmar la campaña desde «Nueva campaña». Publicar no envía ni programa correos.</p>';
     if (!purpose) return '<p>Selecciona una finalidad para ver cuándo se utiliza esta plantilla.</p>' +
       (state.current.id ? '<p class="mail-purpose-footnote">Esta tarjeta no tiene una finalidad de envío asociada.</p>' : '');
     const usage = (state.catalog.find(item => item.key === purpose) || {}).usage || {
@@ -1045,7 +1046,7 @@
     }
     if (name === "unpublish") {
       if (state.dirty) return message("Guarda el borrador antes de despublicarlo.", "warning");
-      if (!window.confirm("¿Despublicar únicamente esta plantilla? Los próximos correos automáticos usarán el diseño de respaldo configurado. Se conservan el borrador y las versiones históricas.")) return;
+      if (!window.confirm(state.current.familyId && !state.current.purpose ? '¿Despublicar únicamente esta versión de campaña? Las versiones de los otros círculos y las campañas ya confirmadas se conservan.' : "¿Despublicar únicamente esta plantilla? Los próximos correos automáticos usarán el diseño de respaldo configurado. Se conservan el borrador y las versiones históricas.")) return;
       state.current = await api(pathFor("/templates/" + state.current.id + "/actions"), "POST", {
         action: "unpublish", revision: state.current.revision, confirmed: true,
       });
@@ -1212,13 +1213,14 @@
     }
     if (name === "publish") {
       if (!state.current.id || state.dirty) return message("Guarda el borrador antes de publicarlo.", "warning");
-      if (!window.confirm("¿Publicar esta versión para los próximos correos automáticos?")) return;
+      const manualCampaign = state.current.familyId && !state.current.purpose;
+      if (!window.confirm(manualCampaign ? '¿Publicar esta versión de campaña para el Círculo ' + state.current.campaignCircle + '? Se conservarán las publicaciones de los otros círculos. No se enviará ni programará la campaña.' : "¿Publicar esta versión para los próximos correos automáticos?")) return;
       state.current = await api(pathFor("/templates/" + state.current.id + "/actions"), "POST", {
         action: "publish", revision: state.current.revision, confirmed: true,
       });
       state.dirty = false;
       editor();
-      return message("Versión publicada y activa.", "success");
+      return message(manualCampaign ? 'Versión de campaña publicada. Revisa los destinatarios y la fecha desde «Nueva campaña» para confirmar el envío.' : "Versión publicada y activa.", "success");
     }
     if (name === "test") {
       if (!state.current.id || state.dirty) return message("Guarda el borrador antes de enviar una prueba.");

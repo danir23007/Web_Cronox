@@ -1,4 +1,5 @@
 import { CART_COPY } from './cart-abandoned-design';
+import { manualCampaignScope } from './campaign-publication';
 import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
 import { CIRCLE_PROMOTION_PREHEADER, circlePromotionDocument } from './circle-promotion-design';
 import { mailPublicationKey, recipientMailCircle, snapshotMailCircle } from './mail-publication-scope';
@@ -947,6 +948,11 @@ export class ManagedMailService {
         case 'unpublish': {
           if (!dto.confirmed)
             throw new BadRequestException('Confirma la despublicación antes de continuar.');
+          if (t.familyId && t.purpose === null) {
+            const scope = await manualCampaignScope(tx, key, t);
+            await tx.emailPublication.deleteMany({ where: { senderKey: key, purpose: scope.publicationKey, version: { templateId: id } } });
+            break;
+          }
           const folder = await this.folder(tx, key, t.folderId), circle = mailCircleNumber(folder.name);
           if (!circle) throw new BadRequestException('La publicación debe pertenecer a un círculo del I al V.');
           // The draft may have changed its purpose since publication. Use its
@@ -966,6 +972,18 @@ export class ManagedMailService {
           });
           break;
         case 'publish': {
+          if (!dto.confirmed) throw new BadRequestException('Confirma la publicación de esta versión antes de continuar.');
+          if (t.familyId && t.purpose === null) {
+            const scope = await manualCampaignScope(tx, key, t);
+            const editorial = renderMail(t.document, t.subject, t.preheader, null, mailPreviewData(null, scope.circle), undefined, true);
+            if (!editorial.subject.trim() || !(t.textOverride ?? editorial.text).trim()) throw new BadRequestException('La versión necesita un asunto y contenido propios; el pie corporativo no basta para publicarla.');
+            const rendered = await this.render(key, t, mailPreviewData(null, scope.circle), true, tx);
+            if (!rendered.subject.trim() || !rendered.text.trim()) throw new BadRequestException('La versión necesita un asunto y contenido válidos antes de publicarse.');
+            const version = await tx.emailTemplateVersion.create({ data: { templateId: id, snapshot: json({ ...t, publicationCircle: scope.circle }), createdBy: actorId } });
+            await tx.emailPublication.upsert({ where: { senderKey_purpose: { senderKey: key, purpose: scope.publicationKey } },
+              update: { versionId: version.id }, create: { senderKey: key, purpose: scope.publicationKey, versionId: version.id } });
+            break;
+          }
           if (
             !dto.confirmed ||
             !t.purpose ||
@@ -975,7 +993,7 @@ export class ManagedMailService {
             )
           )
             throw new BadRequestException(
-              'Confirma la activación de una plantilla válida de esta cuenta.',
+              'La plantilla necesita una finalidad automática válida del mismo buzón o una familia manual de Información, y no puede estar archivada.',
             );
           const folder = await this.folder(tx, key, t.folderId), circle = mailCircleNumber(folder.name);
           if (!circle) throw new BadRequestException('Para publicar, utiliza un círculo del I al V.');

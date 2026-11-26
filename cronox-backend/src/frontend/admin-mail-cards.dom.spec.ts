@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
-async function workspace(options: { blocked?: boolean; fail?: boolean; total?: number; htmlEmail?: boolean } = {}) {
+async function workspace(options: { blocked?: boolean; fail?: boolean; total?: number; htmlEmail?: boolean; manualCampaign?: boolean } = {}) {
   const dom = new JSDOM('<section id="section-mails"><p id="mailFeedback"></p><div id="mailWorkspace"></div></section>', { url: 'http://localhost/admin.html', runScripts: 'outside-only' });
   const win = dom.window as any;
   const rows: any[] = Array.from({ length: options.total || 3 }, (_, index) => ({
@@ -12,6 +12,7 @@ async function workspace(options: { blocked?: boolean; fail?: boolean; total?: n
     visualClassification: [null, 'FOR_ALL', 'DIFFERENT'][index % 3], document: { blocks: [] }, updatedAt: new Date().toISOString(),
   }));
   if (options.htmlEmail) rows[0].document = { schemaVersion: 3, format: 'html-email', page: { width: 600, background: '#aaa9a6' }, blocks: [{ type: 'html', html: '<p>{{message}}</p>' }] };
+  if (options.manualCampaign) Object.assign(rows[0], { familyId: 'family-fixture', campaignCircle: 1 });
   let fail = options.fail, writes = 0;
   const api = jest.fn(async (path: string, method = 'GET', body?: any): Promise<any> => {
     if (!path) return [{ key: 'INFO', email: 'info@cronox.local', counts: { folders: 1, templates: rows.length } }];
@@ -35,6 +36,7 @@ async function workspace(options: { blocked?: boolean; fail?: boolean; total?: n
         rows.splice(rows.indexOf(row), 1); return { ...row, archivedAt: new Date() };
       }
       if (body.action === 'duplicate') { const copy = { ...row, id: 'copy', revision: 1 }; rows.push(copy); return copy; }
+      if (body.action === 'publish') { row.revision++; return { ...row }; }
     }
     if (path.endsWith('/drafts') && method === 'PATCH') {
       writes++; const selected = rows.filter(item => body.targets.some((t: any) => t.id === item.id));
@@ -56,6 +58,23 @@ async function workspace(options: { blocked?: boolean; fail?: boolean; total?: n
 }
 
 describe('manual template classification and safe card deletion', () => {
+  it('explains manual publication and sends the activation confirmation only after the dialog is accepted', async () => {
+    const t = await workspace({ manualCampaign: true });
+    try {
+      await t.click('[data-mail-action="edit"][data-id="t0"]');
+      expect(t.win.document.body.textContent).toContain('no necesita una finalidad automática');
+      expect(t.win.document.body.textContent).not.toContain('Esta tarjeta no tiene una finalidad de envío asociada');
+      const confirm = jest.fn().mockReturnValue(false); t.win.confirm = confirm;
+      await t.click('[data-mail-action="publish"]');
+      expect(t.writes()).toBe(0);
+      expect(confirm.mock.calls[0][0]).toContain('No se enviará ni programará');
+      confirm.mockReturnValue(true);
+      await t.click('[data-mail-action="publish"]');
+      expect(t.api).toHaveBeenCalledWith('/INFO/templates/t0/actions', 'POST', { action: 'publish', revision: 1, confirmed: true });
+      expect(t.rows[0].purpose).toBeNull();
+      expect(t.win.document.querySelector('#mailFeedback').textContent).toContain('Versión de campaña publicada');
+    } finally { t.dom.window.close(); }
+  });
   it('sizes the preview to content, shrinks short messages and refits when images load without draft writes', async () => {
     const t = await workspace();
     await t.click('[data-mail-action="edit"][data-id="t0"]');

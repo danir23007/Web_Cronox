@@ -20,6 +20,8 @@
       ? new Date(v).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })
       : "Nunca";
   const codes = {
+    MAILBOX_INVALID_DRAFT_ID: 'El identificador del borrador no es válido. Abre el borrador guardado desde Borradores y salida.',
+    MAILBOX_INVALID_INPUT: 'Hay datos no válidos. Revisa el borrador, la familia, los círculos y la fecha seleccionada.',
     MAILBOX_PERMISSION_USER_CHANGED: 'La identidad del administrador seleccionado ha cambiado. Abre de nuevo la configuración y revisa los permisos.',
     MAILBOX_NEW_MESSAGE_REQUIRES_CAMPAIGN:'Los nuevos mensajes se organizan como campañas. Para responder o reenviar, abre un mensaje recibido.',
     MAILBOX_CAMPAIGN_CAPACITY_WAITING:'En espera de capacidad de Información. Los destinatarios pendientes se conservan y continuarán después.',
@@ -682,7 +684,7 @@
       const reasonLabel = reason => ({ NO_SUBSCRIPTION_EVIDENCE: 'Sin evidencia suficiente de suscripción vigente', SUPPRESSION_UNSUBSCRIBED: 'Baja expresa', SUPPRESSION_DECLINED: 'Rechazo expreso', SUPPRESSION_CONFIRMED_HARD_BOUNCE: 'Rebote permanente confirmado', INVALID_EMAIL: 'Dirección no válida', DUPLICATE_EMAIL: 'Dirección duplicada', AMBIGUOUS_CIRCLE: 'Dirección vinculada a círculos distintos', ACCOUNT_BLOCKED: 'Cuenta bloqueada', ACCOUNT_DELETED: 'Cuenta eliminada' }[reason] || reason);
       const exclusionReview = result.excluded?.length ? `<details data-audience-exclusions><summary>Revisar ${result.excluded.length} excluidos</summary><ul>${Object.entries(result.exclusionCounts || {}).map(([reason, count]) => `<li>${esc(reasonLabel(reason))}: ${esc(count)}</li>`).join('')}</ul><ul>${result.excluded.map(row => `<li style="overflow-wrap:anywhere">${esc(row.email)} · Círculo ${esc(row.circle)} · ${esc(reasonLabel(row.reason))}</li>`).join('')}</ul></details>` : '';
       const target = host.querySelector('[data-campaign-review]');
-      target.innerHTML = `${result.blocked.map(x => `<p class="mail-notice">${esc(x)}</p>`).join('')}${result.previews.map(p => `<details><summary>Círculo ${p.circle} · ${p.count} destinatarios${p.missing ? ' · Falta la versión' : ''}</summary>${p.missing ? '' : `<p>Asunto: ${esc(p.subject)}</p><iframe data-preview-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Vista previa de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe>`}</details>`).join('')}<p class="mail-muted">${esc(result.policy.reasons.join(' '))}</p>`;
+      target.innerHTML = `${result.blocked.map(x => `<p class="mail-notice">${esc(x)}</p>`).join('')}${result.previews.map(p => `<details><summary>Círculo ${p.circle} · ${p.count} destinatarios${p.missingPublication ? ' · Falta publicar la versión' : p.missing ? ' · Falta la versión' : ''}</summary>${p.missing ? '' : `<p>Asunto: ${esc(p.subject)}</p><iframe data-preview-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Vista previa de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe>`}</details>`).join('')}<p class="mail-muted">${esc(result.policy.reasons.join(' '))}</p>`;
       result.previews.forEach(p => { const frame = target.querySelector(`[data-preview-circle="${p.circle}"]`); if (frame) frame.srcdoc = p.html || ''; });
       target.insertAdjacentHTML('afterbegin', exclusionReview);
     };

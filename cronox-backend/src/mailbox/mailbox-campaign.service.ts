@@ -30,6 +30,7 @@ import { MailboxTrackingService } from './mailbox-tracking.service';
 import { composeApplicationMail } from '../email/mail-footer-composition';
 import { mailPreferenceToken, readMailPreferenceToken } from '../email/mail-preference-token';
 import { saveNewsletterPreference } from '../newsletter/newsletter-preference';
+import { campaignPublicationKey, manualCampaignScope } from '../email/managed/campaign-publication';
 
 @Injectable()
 export class MailboxCampaignService {
@@ -295,7 +296,7 @@ export class MailboxCampaignService {
         });
     }
     for (const circle of selected) {
-      const t = family?.versions.find(
+      const draftTemplate = family?.versions.find(
         (v: any) =>
           v.campaignCircle === circle &&
           v.senderKey === 'INFO' &&
@@ -303,13 +304,28 @@ export class MailboxCampaignService {
           v.purpose === null,
       );
       const members = audience.recipients.filter((r) => r.circle === circle);
-      if (!t) {
+      if (!draftTemplate) {
         blocked.push(
           'Falta una versión válida para el círculo ' + circle + '.',
         );
         previews.push({ circle, count: members.length, missing: true });
         continue;
       }
+      try { await manualCampaignScope(tx, 'INFO', draftTemplate); }
+      catch (error) {
+        if (!(error instanceof BadRequestException)) throw error;
+        blocked.push('Círculo ' + circle + ': revisa la relación entre familia, plantilla y carpeta.');
+        previews.push({ circle, count: members.length, missing: true });
+        continue;
+      }
+      const publication = await tx.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: 'INFO', purpose: campaignPublicationKey(family.id, circle) } }, include: { version: true } });
+      const snapshot: any = publication?.version.snapshot;
+      if (!publication || publication.version.templateId !== draftTemplate.id || !snapshot || snapshot.id !== draftTemplate.id || snapshot.senderKey !== 'INFO' || snapshot.familyId !== family.id || snapshot.purpose !== null || snapshot.campaignCircle !== circle || snapshot.publicationCircle !== circle || !Number.isInteger(snapshot.revision) || snapshot.archivedAt) {
+        blocked.push('Publica una versión válida de esta familia para el Círculo ' + circle + ' antes de confirmar la campaña.');
+        previews.push({ circle, count: members.length, missing: true, missingPublication: true });
+        continue;
+      }
+      const t = snapshot;
       const source = await this.templates.render(
         'INFO',
         t,
@@ -350,6 +366,7 @@ export class MailboxCampaignService {
           text: content.text,
           templateId: t.id,
           templateRevision: t.revision,
+          publicationVersionId: publication.version.id,
           familyId: family.id,
           circle,
         };
@@ -372,6 +389,7 @@ export class MailboxCampaignService {
         count: members.length,
         templateId: t.id,
         templateRevision: t.revision,
+        publicationVersionId: publication.version.id,
         ...(preview || source),
       });
     }
@@ -591,6 +609,7 @@ export class MailboxCampaignService {
                 circle: p.circle,
                 templateId: p.templateId,
                 templateRevision: p.templateRevision,
+                publicationVersionId: p.publicationVersionId,
 
               })),
               files: [],

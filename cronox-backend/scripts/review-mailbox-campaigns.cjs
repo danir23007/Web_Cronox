@@ -23,8 +23,16 @@ module.exports=async function review({app,db,backend,request,boxId,users,provide
   const profile=await db.emailSenderProfile.upsert({where:{key:'INFO'},create:{key:'INFO'},update:{}});
   const folder=await db.emailTemplateFolder.create({data:{senderKey:profile.key,name:'Campaign fixture'}});
   const family=await db.campaignTemplateFamily.create({data:{name:'Static fixture family',eventKind:'GENERAL'}});
+  const {ManagedMailService}=require(path.join(backend,'dist/email/managed/managed-mail.service'));
+  const managed=app.get(ManagedMailService);
+  const publish=async id=>{const row=await db.managedEmailTemplate.findUniqueOrThrow({where:{id}});return managed.action('INFO',id,{action:'publish',confirmed:true,revision:row.revision},actor.id);};
   const versions=[];
-  for(let circle=1;circle<=5;circle++) versions.push(await db.managedEmailTemplate.create({data:{senderKey:'INFO',folderId:folder.id,familyId:family.id,campaignCircle:circle,name:'Static fixture '+circle,subject:'Circle '+circle,document:{blocks:[{type:'text',text:'Synthetic body circle '+circle}]},html:'',text:''}}));
+  for(let circle=1;circle<=5;circle++) {
+    const name='C\u00edrculo '+circle;
+    const circleFolder=await db.emailTemplateFolder.findFirst({where:{senderKey:'INFO',name}})||await db.emailTemplateFolder.create({data:{senderKey:'INFO',name}});
+    const row=await db.managedEmailTemplate.create({data:{senderKey:'INFO',folderId:circleFolder.id,familyId:family.id,campaignCircle:circle,name:'Static fixture '+circle,subject:'Circle '+circle,document:{blocks:[{type:'text',text:'Synthetic body circle '+circle}]},html:'',text:''}});
+    versions.push(await publish(row.id));
+  }
   const t=versions[0];
   assert.equal((await campaigns.options(actor,boxId)).families.filter(f=>f.id===family.id).length,1);
   await assert.rejects(()=>service.createDraft(actor,{mailboxId:originalBoxId,mode:'campaign'}),/info@cronox.es/);
@@ -62,15 +70,18 @@ module.exports=async function review({app,db,backend,request,boxId,users,provide
   await assert.rejects(()=>enqueue(leaking),e=>e.getResponse().details.some(x=>x.includes('2')));
   await db.managedEmailTemplate.update({where:{id:versions[1].id},data:{archivedAt:null}});
   const missing=await db.managedEmailTemplate.update({where:{id:versions[1].id},data:{subject:'{{subject}}'}});
+  await publish(versions[1].id);
   assert((await campaigns.summary(actor,leaking.id)).blocked.some(x=>x.includes('subject')));
   await assert.rejects(()=>enqueue(leaking),e=>e.getResponse().details.some(x=>x.includes('subject')));
   await db.managedEmailTemplate.update({where:{id:versions[1].id},data:{subject:'Circle 2'}});
+  await publish(versions[1].id);
   await assert.rejects(()=>campaigns.suppress({id:users.writer.id,role:'ADMIN'},u1.email,'UNSUBSCRIBED'),/SUPERADMIN_REQUIRED/);
   pass('No free drafting, manual recipients, cross-circle template IDs or attachments; all-or-nothing missing versions and variables');
   const product=await db.product.create({data:{slug:'campaign-product-fixture',name:'Actual fixture product',price:25,imageUrl:'https://example.test/product.png'}});
   const variant=await db.productVariant.create({data:{productId:product.id,size:'M',sku:'CAMPAIGN-FIXTURE-M',stockQty:2}});
   const restockFamily=await db.campaignTemplateFamily.create({data:{name:'Custom restock campaign fixture',eventKind:'RESTOCK'}});
-  const restock=await db.managedEmailTemplate.create({data:{senderKey:'INFO',folderId:folder.id,familyId:restockFamily.id,campaignCircle:1,purpose:null,name:'Different visible title',subject:'Restock {{product}} {{size}}',document:{blocks:[{type:'text',text:'{{product}} {{size}} {{actionUrl}}'}]},html:'Preserve import HTML',text:'Preserve import text'}});
+  let restock=await db.managedEmailTemplate.create({data:{senderKey:'INFO',folderId:versions[0].folderId,familyId:restockFamily.id,campaignCircle:1,purpose:null,name:'Different visible title',subject:'Restock {{product}} {{size}}',document:{blocks:[{type:'text',text:'{{product}} {{size}} {{actionUrl}}'}]},html:'Preserve import HTML',text:'Preserve import text'}});
+  restock=await publish(restock.id);
   assert.equal(restock.familyId,restockFamily.id);assert.equal(restock.campaignCircle,1);
   let eventDraft=await service.createDraft(actor,{mailboxId:boxId,mode:'campaign'});
   eventDraft=await service.saveDraft(actor,eventDraft.id,{familyId:restock.familyId,circles:[1],revision:eventDraft.revision});
@@ -79,8 +90,6 @@ module.exports=async function review({app,db,backend,request,boxId,users,provide
   const eventPlan=await campaigns.summary(actor,eventDraft.id);
   assert.equal(eventPlan.blocked.length,0);assert.equal(eventPlan.previews[0].subject,'Restock Actual fixture product M');
   assert(eventPlan.previews[0].html.includes('/producto/campaign-product-fixture?size=M'));
-  const {ManagedMailService}=require(path.join(backend,'dist/email/managed/managed-mail.service'));
-  const managed=app.get(ManagedMailService);
   await managed.saveCampaignFamily('INFO',{name:'Renamed family',eventKind:'RESTOCK',revision:1},restock.familyId);
   assert.equal((await db.managedEmailTemplate.findUniqueOrThrow({where:{id:restock.id}})).html,'Preserve import HTML');
   await db.managedEmailTemplate.update({where:{id:restock.id},data:{textOverride:'Separate {{product}} {{size}}',text:'Separate {{product}} {{size}}'}});
