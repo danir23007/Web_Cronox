@@ -135,4 +135,3 @@ const name = 'cronox_manual_campaign_test_' + randomUUID().replace(/-/g, ''), ba
   }
   console.log(JSON.stringify({ passed: true, disposableDatabaseRemoved: true, checks }, null, 2));
 })().catch(error => { console.error(error.code || error.name, String(error.message).replace(/postgres(?:ql)?:\/\/\S+/g, '[redacted]')); process.exitCode = 1; });
-
