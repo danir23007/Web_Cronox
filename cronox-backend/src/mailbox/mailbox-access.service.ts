@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 export type MailActor = { id: number; role: string };
 @Injectable()
 export class MailboxAccessService {
@@ -12,11 +13,11 @@ export class MailboxAccessService {
     if (actor.role !== 'SUPERADMIN')
       throw new ForbiddenException('MAILBOX_SUPERADMIN_REQUIRED');
   }
-  async allowedIds(actor: MailActor, send = false) {
+  async allowedIds(actor: MailActor, send = false, db: Prisma.TransactionClient = this.db) {
     if (!['ADMIN', 'SUPERADMIN'].includes(actor.role))
       throw new ForbiddenException('MAILBOX_ACCESS_DENIED');
     return (
-      await this.db.mailbox.findMany({
+      await db.mailbox.findMany({
         where:
           actor.role === 'SUPERADMIN'
             ? {}
@@ -32,10 +33,10 @@ export class MailboxAccessService {
       })
     ).map((b) => b.id);
   }
-  async box(actor: MailActor, id: string, send = false) {
-    if (!(await this.allowedIds(actor, send)).includes(id))
+  async box(actor: MailActor, id: string, send = false, db: Prisma.TransactionClient = this.db) {
+    if (!(await this.allowedIds(actor, send, db)).includes(id))
       throw new ForbiddenException('MAILBOX_ACCESS_DENIED');
-    const box = await this.db.mailbox.findUnique({ where: { id } });
+    const box = await db.mailbox.findUnique({ where: { id } });
     if (!box) throw new NotFoundException('MAILBOX_NOT_FOUND');
     return box;
   }

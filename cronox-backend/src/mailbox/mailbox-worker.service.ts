@@ -39,6 +39,7 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
       void this.tick().catch(() => {});
     }, 5000);
     this.timer.unref();
+    this.logger.log('Mailbox worker started; poll=5000ms; persistent campaign scheduler enabled');
   }
   async onModuleDestroy() {
     this.stopped = true;

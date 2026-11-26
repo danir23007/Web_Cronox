@@ -15,6 +15,9 @@ const name = 'cronox_manual_campaign_test_' + randomUUID().replace(/-/g, ''), ba
     assert.ok(['127.0.0.1', '::1'].includes((await control.query('SELECT host(inet_server_addr()) AS host')).rows[0].host));
     await control.query(`CREATE DATABASE "${name}" TEMPLATE template0`); created = true;
     const target = new URL(source); target.pathname = '/' + name; target.search = '';
+    // Production has one connection. A query escaping the interactive
+    // transaction must fail here instead of being hidden by a larger dev pool.
+    target.searchParams.set('connection_limit', '1'); target.searchParams.set('pool_timeout', '1');
     const sql = new Client({ connectionString: target.href }); await sql.connect(); await sql.query('CREATE EXTENSION IF NOT EXISTS pg_trgm'); await sql.end();
     const push = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate'], { cwd: backend, env: { ...env, DATABASE_URL: target.href, DIRECT_URL: target.href, USER_NUMBERING_DATABASE_URL: target.href }, windowsHide: true, encoding: 'utf8' });
     assert.equal(push.status, 0, 'Disposable schema setup failed');
@@ -41,10 +44,10 @@ const name = 'cronox_manual_campaign_test_' + randomUUID().replace(/-/g, ''), ba
     const content=t=>({subject:t.subject,preheader:t.preheader,document:t.document,html:t.html,text:t.text,textOverride:t.textOverride,signatureMode:t.signatureMode});
     for(let circle=1;circle<=5;circle++){
       const folder=await db.emailTemplateFolder.create({data:{senderKey:'INFO',name:'C\u00edrculo '+circle,position:circle}});
-      const document={blocks:[{type:'text',text:'Black Friday circle '+circle,color:'#000000'},{type:'image',src:'https://example.test/original-counter.png',alt:'Black Friday 00 : 00 : 00 : 00',href:'https://example.test/',width:640,padding:0},{type:'button',text:'DISCOVER',href:'https://example.test/'}]};
+      const document={blocks:[{type:'text',text:'Black Friday circle '+circle+' Contact: info@cronox.es',color:'#000000'},{type:'image',src:'https://example.test/original-counter.png',alt:'Black Friday 00 : 00 : 00 : 00',href:'https://example.test/',width:640,padding:0},{type:'button',text:'DISCOVER',href:'https://example.test/'}]};
       templates.push(await db.managedEmailTemplate.create({data:{senderKey:'INFO',folderId:folder.id,familyId:family.id,campaignCircle:circle,purpose:null,name:'Fixture circle '+circle,subject:'Published circle '+circle,preheader:'Preserve preheader '+circle,document,html:'Stored HTML '+circle,text:'Stored text '+circle,signatureMode:'none'}}));
     }
-    await db.user.createMany({data:Array.from({length:100},(_,i)=>({email:'fixture'+i+'@example.test',name:'Persona '+i,role:i===0?'SUPERADMIN':i===1?'ADMIN':'USER',newsletterSubscribed:true,circleLevel:i===0?5:i<10?2:1}))});
+    await db.user.createMany({data:Array.from({length:100},(_,i)=>({email:'fixture'+i+'@example.test',name:'Persona '+i,role:i===0?'SUPERADMIN':i===1?'ADMIN':i<30?'FRIEND':'USER',newsletterSubscribed:true,circleLevel:i===0?5:i<10?2:1}))});
     const actor=await db.user.findFirstOrThrow({where:{role:'SUPERADMIN'}}),admin=await db.user.findFirstOrThrow({where:{role:'ADMIN'}});
     const box=await db.mailbox.create({data:{name:'Info',address:'info@cronox.es',fromName:'CRONOX',provider:'fixture',imapHost:'127.0.0.1',smtpHost:'127.0.0.1',username:'fixture',active:true}});
     let draft=await db.mailboxDraft.create({data:{id:'campaign-draft:INFO:BLACK_FRIDAY_NUMBERS_2026',mailboxId:box.id,userId:actor.id,mode:'campaign',familyId:family.id,circles:[1,2,3,4,5]}});
@@ -120,12 +123,27 @@ const name = 'cronox_manual_campaign_test_' + randomUUID().replace(/-/g, ''), ba
     const book=new(require('exceljs').Workbook)();await book.xlsx.load(bytes);assert.equal(book.getWorksheet('Destinatarios').actualRowCount-1,100);
     checks.push('stable draft identifier accepted by HTTP; owner enforced; published snapshots selected instead of later edits; Excel agrees');
     const payload={draftId:draft.id,revision:draft.revision,familyId:family.id,circles:[1,2,3,4,5],requestKey:randomUUID(),previewHash:plan.previewHash,localDate:'2099-11-27T21:00'};
-    const scheduled=await api.post('/api/admin/mailbox/boxes/'+box.id+'/campaign').send(payload).expect(201);
+    const initial=await Promise.all([api.post('/api/admin/mailbox/boxes/'+box.id+'/campaign').send(payload),api.post('/api/admin/mailbox/boxes/'+box.id+'/campaign').send(payload)]);
+    const scheduled=initial[0];
+    assert.equal(scheduled.status,201,'Scheduling HTTP '+scheduled.status+': '+scheduled.body.message);
+    assert.ok(initial.every(r=>r.status===201&&r.body.id===scheduled.body.id));
     const repeated=await Promise.all([api.post('/api/admin/mailbox/boxes/'+box.id+'/campaign').send(payload),api.post('/api/admin/mailbox/boxes/'+box.id+'/campaign').send(payload)]);
     assert.ok(repeated.every(r=>r.status===201&&r.body.id===scheduled.body.id));
+    const recovered=await api.get('/api/admin/mailbox/boxes/'+box.id+'/campaign-requests/'+payload.requestKey).expect(200);
+    assert.equal(recovered.body.campaign.id,scheduled.body.id); assert.equal(recovered.body.campaign.status,'SCHEDULED');
+    assert.equal(new Date(recovered.body.campaign.scheduledAt).toISOString(),'2099-11-27T20:00:00.000Z');
+    await api.get('/api/admin/mailbox/boxes/'+box.id+'/campaign-requests/'+payload.requestKey).set('x-fixture-role','ADMIN').set('x-fixture-id',String(admin.id)).expect(403);
+    await api.get('/api/admin/mailbox/boxes/'+box.id+'/campaign-requests/not-a-uuid').expect(400);
+    assert.equal((await api.get('/api/admin/mailbox/boxes/'+box.id+'/campaign-requests/'+randomUUID()).expect(200)).body.campaign,null);
     assert.equal(await db.mailboxCampaign.count(),1);assert.equal(await db.mailboxCampaignDelivery.count(),100);
     assert.equal(await db.mailboxSend.count(),0);assert.equal(await db.newsletterMailJob.count(),0);
     assert.ok((await db.mailboxCampaignDelivery.findMany()).every(d=>d.status==='PENDING'&&d.attempts===0));
+    await app.close(); app=null; await db.$disconnect();
+    db=new PrismaClient({datasources:{db:{url:target.href}}});
+    const restarted=await db.mailboxCampaign.findUniqueOrThrow({where:{id:scheduled.body.id},include:{_count:{select:{deliveries:true}}}});
+    assert.equal(restarted.status,'SCHEDULED');assert.equal(restarted.scheduledAt.toISOString(),'2099-11-27T20:00:00.000Z');assert.equal(restarted._count.deliveries,100);
+    checks.push('single-connection pool: transactional permission and content-privacy checks, all roles, Madrid UTC conversion, persisted request recovery and owner checks');
+    checks.push('schedule and 100 pending deliveries survive application shutdown and a fresh database client');
     checks.push('future scheduling through real HTTP, retries without duplicates, zero SMTP calls and zero sends/jobs');
   } finally {
     if (app) await app.close();
@@ -134,4 +152,4 @@ const name = 'cronox_manual_campaign_test_' + randomUUID().replace(/-/g, ''), ba
     await control.end();
   }
   console.log(JSON.stringify({ passed: true, disposableDatabaseRemoved: true, checks }, null, 2));
-})().catch(error => { console.error(error.code || error.name, String(error.message).replace(/postgres(?:ql)?:\/\/\S+/g, '[redacted]')); process.exitCode = 1; });
+})().catch(error => { console.error(error.code || error.name, String(error.stack || error.message).replace(/postgres(?:ql)?:\/\/\S+/g, '[redacted]')); process.exitCode = 1; });

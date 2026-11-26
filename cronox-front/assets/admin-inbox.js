@@ -40,7 +40,12 @@
     MAILBOX_CAMPAIGN_SEND_PERMISSION_REVOKED: "En espera: el administrador ya no tiene permiso de envío.",
     MAILBOX_CUSTOMER_ADDRESSES_IN_CONTENT: "El contenido o un adjunto incluye direcciones de clientes. Retíralas antes de enviar una comunicación común por círculos.",
     MAILBOX_OPERATION_FAILED:
-      "No se pudo completar la operación. Reintenta o revisa el diagnóstico del buzón.",
+      "El servidor no pudo completar la operación. Conserva el borrador e indica la referencia del error al administrador.",
+    MAILBOX_TRANSACTION_TIMEOUT: 'La transacción agotó su tiempo. Se conserva el formulario; comprueba la salida antes de reintentar.',
+    MAILBOX_TRANSACTION_CONFLICT: 'Los datos cambiaron durante la operación. Revisa el resumen y reintenta.',
+    MAILBOX_RECORD_CONFLICT: 'Ya existe un registro para esta operación. Comprueba la salida antes de volver a programar.',
+    MAILBOX_RELATION_CONFLICT: 'No se pudo vincular la campaña con sus versiones o destinatarios. Conserva el borrador e indica la referencia del error.',
+    MAILBOX_DATABASE_UNAVAILABLE: 'La base de datos no está disponible temporalmente. Se conservan los datos del formulario; comprueba la salida antes de reintentar.',
     MAILBOX_MESSAGE_UNAVAILABLE:
       "El mensaje ya no está disponible en el buzón original.",
     MAILBOX_MESSAGE_NOT_FOUND:
@@ -184,6 +189,7 @@
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(result.details?.join(' ') || codes[result.message] || `${result.message || "No se pudo completar la operación"} (${response.status})`);
+      if (result.reference) error.message += ' Referencia: ' + result.reference;
       error.code = result.message;
       throw error;
     }
@@ -644,7 +650,10 @@
     const host = root.querySelector('.mail-editor'), currentDraft = draft, seq = readSeq;
     host.innerHTML = '<p role="status">Cargando campaña…</p>';
     const legacy = draft.mode === 'circles', locked = draft.status !== 'DRAFT';
-    const options = legacy ? { families: [], variants: [] } : await api('/boxes/' + draft.mailboxId + '/campaign-options');
+    const options = legacy ? { families: [], variants: [] } : await api('/boxes/' + draft.mailboxId + '/campaign-options').catch(error => {
+      if (!locked) throw error;
+      return { families: [{ id: draft.familyId, name: draft.campaigns?.[0]?.familyName || draft.familyId }], variants: [] };
+    });
     if (draft !== currentDraft || readSeq !== seq) return;
     const campaign = draft.campaigns?.find(c => c.status !== 'CANCELLED') || (locked ? draft.campaigns?.[0] : null);
     host.innerHTML = `<button class="btn" data-back>← Volver</button><h3>${legacy ? 'Campaña anterior' : locked ? 'Salida de campaña' : 'Campaña'}</h3><p>Remitente fijo: <strong>info@cronox.es</strong></p>
@@ -728,7 +737,10 @@
     if (legacy) {
       host.querySelector('[data-campaign-review]').innerHTML = `<details><summary>Consultar contenido anterior</summary><strong>${esc(draft.subject)}</strong><pre style="white-space:pre-wrap">${esc(draft.text)}</pre><p>Adjuntos conservados: ${esc(draft.files.map(f => f.name).join(', ') || 'Ninguno')}</p></details>`;
     } else if (locked && campaign) {
-      const saved = await api('/campaigns/' + campaign.id);
+      const saved = await api('/campaigns/' + campaign.id).catch(error => {
+        if (campaign.scheduledAt && Number.isInteger(campaign.count) && Array.isArray(campaign.previews)) return campaign;
+        throw error;
+      });
       if (!current()) return;
       host.querySelector('[data-audience-count]').textContent = `${status[saved.status] || saved.status} · ${saved.count} destinatarios · ${date(saved.scheduledAt)} · Europe/Madrid`;
       host.querySelector('[data-campaign-review]').innerHTML = `<h4>${esc(saved.familyName)}</h4>${saved.previews.map(p => `<details><summary>Círculo ${p.circle} · ${esc(p.subject)}</summary><iframe data-frozen-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Contenido aprobado de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe></details>`).join('')}`;
@@ -785,13 +797,24 @@
             modal.querySelector('[data-confirm]').onclick = () => finish(true);
           });
           if (!confirmed || !current()) return;
-          const result = await api('/boxes/' + draft.mailboxId + '/campaign', 'POST', {
-            ...data, ...(draft.id ? { draftId: draft.id } : {}), requestKey: key, previewHash: approved.previewHash,
-            ...(scheduled ? { localDate, ...(offset ? { offset } : {}) } : {}),
-          });
+          let result;
+          try {
+            result = await api('/boxes/' + draft.mailboxId + '/campaign', 'POST', {
+              ...data, ...(draft.id ? { draftId: draft.id } : {}), requestKey: key, previewHash: approved.previewHash,
+              ...(scheduled ? { localDate, ...(offset ? { offset } : {}) } : {}),
+            });
+          } catch (error) {
+            // The response can be lost after COMMIT. Only recover this exact
+            // request, with normal mailbox and draft-owner checks on the server.
+            result = (await api('/boxes/' + draft.mailboxId + '/campaign-requests/' + key).catch(() => null))?.campaign;
+            if (!result?.id) throw error;
+          }
           if (!current()) return;
           dirty = false;
-          draft = await api('/drafts/' + result.draftId);
+          // Keep the persisted result even if the subsequent draft refresh fails.
+          const persisted = { ...draft, ...data, id: result.draftId, status: result.status === 'CANCELLED' ? 'DRAFT' : 'SCHEDULED', campaigns: [result] };
+          draft = persisted;
+          draft = await api('/drafts/' + result.draftId).catch(() => persisted);
           document.dispatchEvent(new CustomEvent('cronox:admin-saved', { detail: { container: host } }));
           await renderComposer(); feedback('Campaña confirmada. El progreso se guarda en el servidor.');
         } catch (error) { feedback(error.message, true); }

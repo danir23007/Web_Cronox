@@ -157,7 +157,7 @@ export class MailboxCampaignService {
     if (!circle) return false;
     return (await this.resolveRecipients([circle])).recipients.some(r => r.email === canonicalRecipient(email));
   }
-  async assertPrivateContent(d: any) {
+  async assertPrivateContent(d: any, tx: any = this.db) {
     // A circle message has one shared body: recipient variables/lists must never
     // be copied into it. Also reject customer-address lists in plain attachments.
     const sources = [d.subject, d.text, d.html];
@@ -199,7 +199,7 @@ export class MailboxCampaignService {
     }
     if (
       candidates.size &&
-      (await this.db.user.findFirst({
+      (await tx.user.findFirst({
         where: {
           OR: [...candidates].map((email) => ({
             email: { equals: email, mode: 'insensitive' },
@@ -333,7 +333,7 @@ export class MailboxCampaignService {
         false,
         tx,
       );
-      await this.assertPrivateContent({ ...source, files: [] });
+      await this.assertPrivateContent({ ...source, files: [] }, tx);
       const renderOne = async (r: any) => {
         const data = {
           ...event,
@@ -434,13 +434,13 @@ export class MailboxCampaignService {
       policy: campaignPolicy(),
     };
   }
-  async selection(actor: MailActor, mailboxId: string, input: any) {
+  async selection(actor: MailActor, mailboxId: string, input: any, tx: any = this.db) {
     if ((input.familyId !== undefined && (typeof input.familyId !== 'string' || input.familyId.length > 100)) ||
       (input.campaignName !== undefined && (typeof input.campaignName !== 'string' || input.campaignName.length > 160)) ||
       (input.variantId !== undefined && (!Number.isInteger(input.variantId) || input.variantId < 1)) ||
       (input.revision !== undefined && (!Number.isInteger(input.revision) || input.revision < 1)))
       throw new BadRequestException('MAILBOX_INVALID_CAMPAIGN');
-    const mailbox = await this.access.box(actor, mailboxId, true);
+    const mailbox = await this.access.box(actor, mailboxId, true, tx);
     this.assertInfo(mailbox);
     return { mailbox, mailboxId, mode: 'campaign', revision: input.revision || 1,
       campaignName: input.campaignName?.trim() || null,
@@ -498,6 +498,7 @@ export class MailboxCampaignService {
   async enqueue(actor: MailActor, id: string | null, input: any, mailboxId?: string) {
     const d = id ? await this.access.draft(actor, id) : await this.selection(actor, mailboxId!, input);
     this.assertInfo(d.mailbox);
+    if (mailboxId && d.mailboxId !== mailboxId) throw new BadRequestException('MAILBOX_INVALID_CAMPAIGN');
     const prior = await this.db.mailboxCampaign.findUnique({
       where: { requestKey: input.requestKey },
     });
@@ -536,7 +537,7 @@ export class MailboxCampaignService {
           where: { id },
           include: { mailbox: true },
         }) : d;
-        const fresh: any = input.selection ? { ...stored, ...await this.selection(actor, stored.mailboxId, input), revision: stored.revision,
+        const fresh: any = input.selection ? { ...stored, ...await this.selection(actor, stored.mailboxId, input, tx), revision: stored.revision,
           campaignName: input.campaignName === undefined ? stored.campaignName : input.campaignName.trim() || null } : stored;
         // Share locks coordinate snapshot creation with revision-claimed template
         // archival. RepeatableRead rejects a stale row if archival won the race.
@@ -634,6 +635,14 @@ export class MailboxCampaignService {
       'CAMPAIGN_SCHEDULED',
       campaign.id,
     );
+    return this.view(actor, campaign.id);
+  }
+  async byRequest(actor: MailActor, mailboxId: string, requestKey: string) {
+    await this.access.box(actor, mailboxId, true);
+    const campaign = await this.db.mailboxCampaign.findUnique({ where: { requestKey } });
+    if (!campaign) return null;
+    const draft = await this.access.draft(actor, campaign.draftId);
+    if (draft.mailboxId !== mailboxId) throw new ConflictException('MAILBOX_IDEMPOTENCY_KEY_USED');
     return this.view(actor, campaign.id);
   }
   async view(actor: MailActor, id: string) {

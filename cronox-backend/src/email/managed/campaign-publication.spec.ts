@@ -1,6 +1,6 @@
 import { campaignPublicationKey, manualCampaignScope } from './campaign-publication';
 import { MailboxErrorFilter, SaveCampaignSelectionDto, SendCampaignSelectionDto } from '../../mailbox/mailbox.controller';
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
 describe('manual publication scope and saved campaign identifiers', () => {
@@ -27,5 +27,16 @@ describe('manual publication scope and saved campaign identifiers', () => {
     const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     new MailboxErrorFilter().catch(new BadRequestException({ message: ['MAILBOX_INVALID_DRAFT_ID'] }), { switchToHttp: () => ({ getResponse: () => res }) } as any);
     expect(res.json).toHaveBeenCalledWith({ statusCode: 400, message: 'MAILBOX_INVALID_DRAFT_ID' });
+  });
+  it('diagnoses the single-connection pool failure without logging Prisma arguments or personal data', () => {
+    const logger = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    try {
+      const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      new MailboxErrorFilter().catch({ name: 'PrismaClientKnownRequestError', code: 'P2024', message: 'private-customer@example.test SECRET_BODY' }, { switchToHttp: () => ({ getResponse: () => res }) } as any);
+      expect(res.json).toHaveBeenCalledWith({ statusCode: 503, message: 'MAILBOX_DATABASE_UNAVAILABLE', reference: expect.any(String) });
+      const log = JSON.parse(logger.mock.calls[0][0]);
+      expect(log).toEqual({ reference: res.json.mock.calls[0][0].reference, code: 'P2024', exception: 'PrismaClientKnownRequestError' });
+      expect(JSON.stringify(logger.mock.calls)).not.toMatch(/private-customer|SECRET_BODY/);
+    } finally { logger.mockRestore(); }
   });
 });

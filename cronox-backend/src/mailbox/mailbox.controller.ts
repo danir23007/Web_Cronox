@@ -24,6 +24,8 @@ import {
   CallHandler,
   CanActivate,
   Optional,
+  Logger,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import multer, { diskStorage } from 'mailbox-multer';
@@ -211,6 +213,7 @@ export class MailboxUploadInterceptor implements NestInterceptor {
 }
 @Catch()
 export class MailboxErrorFilter implements ExceptionFilter {
+  private readonly logger = new Logger(MailboxErrorFilter.name);
   catch(error: any, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
     if (res.headersSent) {
@@ -228,8 +231,25 @@ export class MailboxErrorFilter implements ExceptionFilter {
     const raw = error instanceof HttpException ? error.getResponse() : null;
     const rawCode = raw && typeof raw === 'object' ? (raw as any).message : raw;
     const code = Array.isArray(rawCode) && rawCode.includes('MAILBOX_INVALID_DRAFT_ID') ? 'MAILBOX_INVALID_DRAFT_ID' : rawCode;
+    const databaseErrors: Record<string, string> = {
+      P2021: 'MAILBOX_MIGRATION_REQUIRED',
+      P2028: 'MAILBOX_TRANSACTION_TIMEOUT',
+      P2034: 'MAILBOX_TRANSACTION_CONFLICT',
+      P2002: 'MAILBOX_RECORD_CONFLICT',
+      P2003: 'MAILBOX_RELATION_CONFLICT',
+      P1001: 'MAILBOX_DATABASE_UNAVAILABLE',
+      P1002: 'MAILBOX_DATABASE_UNAVAILABLE',
+      P2024: 'MAILBOX_DATABASE_UNAVAILABLE',
+    };
+    const reference = error instanceof HttpException ? undefined : randomUUID();
+    if (reference) {
+      // Never log Prisma's message/arguments: they can contain entire emails.
+      this.logger.error(JSON.stringify({ reference, code: /^P\d{4}$/.test(error?.code) ? error.code : 'UNEXPECTED',
+        exception: ['PrismaClientKnownRequestError', 'PrismaClientValidationError', 'TypeError', 'RangeError'].includes(error?.name) ? error.name : 'Error' }));
+    }
     res.status(status).json({
       statusCode: status,
+      ...(reference ? { reference } : {}),
       ...(code === 'MAILBOX_CAMPAIGN_BLOCKED' &&
       Array.isArray((raw as any)?.details)
         ? { details: (raw as any).details }
@@ -238,8 +258,8 @@ export class MailboxErrorFilter implements ExceptionFilter {
         typeof code === 'string' &&
         /^(MAILBOX_|INVALID_|CREDENTIAL_|RECIPIENT_)[A-Z0-9_]+$/.test(code)
           ? code
-          : error?.code === 'P2021'
-            ? 'MAILBOX_MIGRATION_REQUIRED'
+          : databaseErrors[error?.code]
+            ? databaseErrors[error.code]
             : status === 400
               ? 'MAILBOX_INVALID_INPUT'
               : status === 403
@@ -361,6 +381,10 @@ export class MailboxController {
     if (body.draftId && (await this.access.draft(r.user!, body.draftId)).mailboxId !== id)
       throw new BadRequestException('MAILBOX_INVALID_CAMPAIGN');
     return this.campaigns.enqueue(r.user!, body.draftId || null, { ...body, selection: true }, id);
+  }
+  @Get('boxes/:id/campaign-requests/:requestKey')
+  async campaignRequest(@Req() r: Request, @Param('id') id: string, @Param('requestKey', new ParseUUIDPipe()) key: string) {
+    return { campaign: await this.campaigns.byRequest(r.user!, id, key) };
   }
   @Get('boxes/:id/campaign-options')
   campaignOptions(@Req() req: Request, @Param('id') id: string) {
