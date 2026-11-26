@@ -3,6 +3,7 @@
 const fs = require('node:fs'), path = require('node:path'), { createHash } = require('node:crypto');
 const { composeBlackFridayOverlay } = require('./compose-black-friday-overlay.cjs');
 const hash = buffer => createHash('sha256').update(buffer).digest('hex');
+const composition = 'static-zero-black-no-panel-v2';
 async function main() {
   if (!process.argv.includes('--production')) throw Error('EXPLICIT_PRODUCTION_TARGET_REQUIRED');
   const config = require('dotenv').parse(fs.readFileSync(path.join(__dirname, '../.env')));
@@ -28,8 +29,19 @@ async function main() {
       if (JSON.stringify(templates.map(t => t.campaignCircle)) !== '[1,2,3,4,5]') throw Error('FIVE_EXISTING_VERSIONS_REQUIRED');
       const originals = [...new Set(templates.map(t => campaignImage(t.document).src).filter(Boolean))];
       if (originals.length !== 1) throw Error('ONE_SAVED_CAMPAIGN_PHOTO_REQUIRED');
-      const originalUrl = originals[0];
-      const sourceAsset = await db.emailAsset.findFirst({ where: { senderKey: 'INFO', url: originalUrl } });
+      const currentUrl = originals[0];
+      let sourceAsset = await db.emailAsset.findFirst({ where: { senderKey: 'INFO', url: currentUrl } });
+      let originalHash;
+      // Always reconstruct from the intact original, never from a raster that
+      // already contains a previous counter. Resolve its recorded provenance.
+      if (sourceAsset?.id.startsWith('bf-overlay:')) {
+        const audit = await db.auditLog.findFirst({ where: { targetId: sourceAsset.id, action: 'EMAIL_ASSET_UPLOAD' }, orderBy: { createdAt: 'desc' } });
+        if (!audit?.metadata?.sourceAssetId || !audit.metadata.originalHash) throw Error('ORIGINAL_IMAGE_PROVENANCE_REQUIRED');
+        originalHash = audit.metadata.originalHash;
+        sourceAsset = await db.emailAsset.findFirst({ where: { id: audit.metadata.sourceAssetId, senderKey: 'INFO' } });
+      }
+      if (sourceAsset?.id.startsWith('bf-overlay:')) throw Error('INTACT_ORIGINAL_IMAGE_REQUIRED');
+      const originalUrl = sourceAsset?.url;
       if (!sourceAsset || !originalUrl.startsWith(config.SUPABASE_URL + '/storage/v1/object/public/')) throw Error('EXISTING_INFO_ASSET_REQUIRED');
       const destinations = [...new Set(templates.map(t => imageDestination(t.document)))];
       for (const destination of destinations) {
@@ -40,8 +52,9 @@ async function main() {
       if (!response.ok) throw Error('ORIGINAL_IMAGE_UNAVAILABLE');
       const original = Buffer.from(await response.arrayBuffer());
       if (original.length > 5 * 1024 * 1024) throw Error('ORIGINAL_IMAGE_TOO_LARGE');
+      if (originalHash && hash(original) !== originalHash) throw Error('ORIGINAL_IMAGE_BYTES_CHANGED');
       const derived = await composeBlackFridayOverlay(original);
-      const plan = { originalUrl, sourceAssetId: sourceAsset.id, originalHash: hash(original), derivedHash: hash(derived.buffer),
+      const plan = { composition, originalUrl, acceptedSourceUrls: [currentUrl], sourceAssetId: sourceAsset.id, originalHash: hash(original), derivedHash: hash(derived.buffer),
         width: derived.width, height: derived.height, bounds: derived.bounds, destinations,
         templates: templates.map(t => ({ id: t.id, revision: t.revision, documentHash: documentHash(t.document) })) };
       fs.mkdirSync(workdir, { recursive: true });
@@ -56,6 +69,7 @@ async function main() {
       return;
     }
     const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+    if (plan.composition !== composition) throw Error('PREPARE_CURRENT_COMPOSITION_PLAN_REQUIRED');
     const original = fs.readFileSync(path.join(workdir, 'original.png'));
     const buffer = fs.readFileSync(path.join(workdir, 'derived.png'));
     if (hash(original) !== plan.originalHash || hash(buffer) !== plan.derivedHash) throw Error('REVIEWED_IMAGE_BYTES_CHANGED');
@@ -88,7 +102,7 @@ async function main() {
         const uploaded = await storage.uploadEmailImage({ buffer, mimetype: 'image/png' }, 'INFO');
         const result = await tx.emailAsset.create({ data: { ...uploaded, id: assetId, senderKey: 'INFO', name: 'Black Friday · contador estático · original ' + sourceAsset.id, alt: OVERLAY_ALT } });
         await tx.auditLog.create({ data: { action: 'EMAIL_ASSET_UPLOAD', actionType: 'EMAIL_ASSET_UPLOAD', targetType: 'EMAIL_ASSET', targetId: result.id,
-          metadata: { sourceAssetId: sourceAsset.id, originalHash: plan.originalHash, derivedHash: plan.derivedHash, composition: 'static-zero-counter-v1', originalPreserved: true } } });
+          metadata: { sourceAssetId: sourceAsset.id, originalHash: plan.originalHash, derivedHash: plan.derivedHash, composition, originalPreserved: true } } });
         return result;
       }, { timeout: 60000 });
     }

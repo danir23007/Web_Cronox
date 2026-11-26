@@ -13,13 +13,19 @@ function editedDocument() {
   return document;
 }
 describe('Black Friday image-only patch', () => {
-  it('preserves manual copy, image sizing, all other blocks and the input document', () => {
+  it('preserves manual copy and vertical spacing, restoring full width without touching other blocks', () => {
     const current = editedDocument(), before = structuredClone(current);
     const next = withBlackFridayOverlay(current, originalUrl, derivedUrl);
     expect(current).toEqual(before);
     expect(next.blocks.filter((_, i) => i !== 2)).toEqual(before.blocks.filter((_, i) => i !== 2));
-    expect(campaignImage(next)).toEqual({ ...campaignImage(before), src: derivedUrl, url: imageDestination(before), alt: OVERLAY_ALT });
+    expect(campaignImage(next)).toEqual({ ...campaignImage(before), src: derivedUrl, url: imageDestination(before), alt: OVERLAY_ALT, width: 640, padding: 0, paddingLeft: 0, paddingRight: 0 });
     expect(withBlackFridayOverlay(next, originalUrl, derivedUrl)).toEqual(next);
+  });
+  it('removes the old narrow image and lateral padding in every circle', () => {
+    const current = editedDocument();
+    Object.assign(campaignImage(current), { width: 560, padding: 16, paddingLeft: 22, paddingRight: 18 });
+    const next = withBlackFridayOverlay(current, originalUrl, derivedUrl);
+    expect(campaignImage(next)).toMatchObject({ width: 640, padding: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 24 });
   });
   it('links the whole raster in actual transport HTML without browser overlays', () => {
     const next = withBlackFridayOverlay(editedDocument(), originalUrl, derivedUrl);
@@ -29,6 +35,12 @@ describe('Black Friday image-only patch', () => {
     expect(image.parentElement?.tagName).toBe('A');
     expect(image.parentElement?.getAttribute('href')).toBe('https://cronox.es/');
     expect(image.alt).toContain('Black Friday ya ha comenzado');
+    expect(image.getAttribute('width')).toBe('640');
+    expect(image.style.width).toBe('100%');
+    expect(image.style.maxWidth).toBe('640px');
+    expect(image.hasAttribute('height')).toBe(false);
+    expect(image.closest('td')?.style.paddingLeft).toBe('0px');
+    expect(image.closest('td')?.style.paddingRight).toBe('0px');
     expect(rendered.html).not.toMatch(/position:absolute|<script|setInterval/);
     expect(rendered.html).toContain('Edición manual que se conserva.');
   });

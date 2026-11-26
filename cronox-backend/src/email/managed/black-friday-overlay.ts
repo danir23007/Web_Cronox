@@ -35,19 +35,26 @@ export function imageDestination(document: MailDocument) {
   return buttons[0].url;
 }
 
-/** Modify only the selected image's source/link/alt, preserving every other field. */
-export function withBlackFridayOverlay(current: MailDocument, originalUrl: string, derivedUrl: string): MailDocument {
+/** Image-only correction. Preserve vertical spacing; restore edge-to-edge width. */
+export function withBlackFridayOverlay(current: MailDocument, originalUrl: string, derivedUrl: string, acceptedSourceUrls: string[] = []): MailDocument {
   const copy = structuredClone(current);
   const image = campaignImage(copy);
-  if (image.src && image.src !== originalUrl && image.src !== derivedUrl) throw Error('CAMPAIGN_PHOTO_CHANGED');
+  if (image.src && image.src !== originalUrl && image.src !== derivedUrl && !acceptedSourceUrls.includes(image.src)) throw Error('CAMPAIGN_PHOTO_CHANGED');
   image.src = derivedUrl;
   image.url = imageDestination(current);
   image.alt = OVERLAY_ALT;
+  image.paddingTop = image.paddingTop ?? image.padding ?? 12;
+  image.paddingBottom = image.paddingBottom ?? image.padding ?? 12;
+  image.padding = 0;
+  image.paddingLeft = 0;
+  image.paddingRight = 0;
+  image.width = 640;
   return copy;
 }
 
 export type OverlayPlan = {
   originalUrl: string;
+  acceptedSourceUrls?: string[];
   templates: Array<{ id: string; revision: number; documentHash: string }>;
 };
 
@@ -78,7 +85,7 @@ export async function updateBlackFridayOverlay(db: any, plan: OverlayPlan, deriv
     const service = new ManagedMailService(scoped, forbidden as any);
     const result: Array<{ id: string; circle: number; changed: boolean }> = [];
     for (const current of templates) {
-      const document = withBlackFridayOverlay(current.document, plan.originalUrl, derivedUrl);
+      const document = withBlackFridayOverlay(current.document, plan.originalUrl, derivedUrl, plan.acceptedSourceUrls);
       const changed = !isDeepStrictEqual(document, current.document);
       const expected = plan.templates.find(t => t.id === current.id);
       // An already applied patch is a no-op, including after later manual edits.
