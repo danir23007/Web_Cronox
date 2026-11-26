@@ -57,6 +57,7 @@ export class PaymentIntentFactory {
       throw new BadRequestException('CHECKOUT_SHIPPING_ADDRESS_REQUIRED');
     }
     const checkoutParams = {
+      ...(typeof dto.newsletterSubscribed === 'boolean' && owner.userId == null ? { newsletterSubscribed: dto.newsletterSubscribed } : {}),
       shippingMethod: dto.shippingMethod,
       promoCode: dto.promoCode,
       shippingAddress: normalizedShippingAddress ?? undefined,

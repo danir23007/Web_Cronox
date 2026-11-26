@@ -82,29 +82,22 @@ describe('checkout and cart startup performance', () => {
       expect(w.document.querySelector('#pay-button').disabled).toBe(true);
     } finally { dom.window.close(); }
   });
-  it('records explicit newsletter consent during bank transfer without opening registration or duplicating in-flight requests', async () => {
+  it('keeps bank-transfer newsletter feedback local until the paid-order account commits the choice', async () => {
     const { dom, w } = setup();
     try {
-      const accepted = pending();
-      w.fetch = jest.fn(() => accepted.promise);
-      w.CRONOX_API.getCsrfHeaders = jest.fn().mockResolvedValue({ 'x-csrf-token': 'fixture' });
+      w.fetch = jest.fn();
       w.CRONOX_openAuthModal = jest.fn();
       w.eval(read('assets/checkout.js')); await flush();
       w.document.getElementById('checkout-guest-email').value = 'guest@example.test';
       const consent = w.document.getElementById('checkout-newsletter-consent');
+      expect(consent.checked).toBe(true);
       const lock = () => w.dispatchEvent(new w.CustomEvent('cronox:bank-transfer-lock', { detail: { locked: true }, cancelable: true }));
-      lock(); await flush();
-      expect(w.fetch).not.toHaveBeenCalled();
-      consent.checked = true;
-      lock(); lock(); await flush();
-      expect(w.fetch).toHaveBeenCalledTimes(1);
-      expect(JSON.parse(w.fetch.mock.calls[0][1].body)).toEqual({ email: 'guest@example.test' });
-      expect(w.fetch.mock.calls[0][1].headers['x-csrf-token']).toBe('fixture');
-      accepted.resolve({ status: 202, json: async () => ({ status: 'accepted' }) }); await flush();
+      consent.checked = false; lock(); await flush();
+      expect(w.sessionStorage.getItem('cronoxNewsletterAfterPurchase')).toBeNull();
+      consent.checked = true; lock(); lock(); await flush();
       w.dispatchEvent(new w.CustomEvent('cronox:bank-transfer-reference', { detail: { paymentIntentId: 'pi_bank_fixture' } })); await flush();
       expect(JSON.parse(w.sessionStorage.getItem('cronoxNewsletterAfterPurchase'))).toMatchObject({ email: 'guest@example.test', providerRef: 'pi_bank_fixture' });
-      lock(); await flush();
-      expect(w.fetch).toHaveBeenCalledTimes(1);
+      expect(w.fetch).not.toHaveBeenCalled();
       expect(w.CRONOX_openAuthModal).not.toHaveBeenCalled();
     } finally { dom.window.close(); }
   });

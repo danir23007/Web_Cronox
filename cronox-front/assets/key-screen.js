@@ -401,7 +401,7 @@
         method: "POST",
         credentials: "include",
         headers,
-        body: JSON.stringify({ email: el.email.value }),
+          body: JSON.stringify({ email: el.email.value, newsletterSubscribed: el.form.querySelector('[name="newsletterSubscribed"]')?.checked === true }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {

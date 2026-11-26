@@ -124,7 +124,7 @@ describe('public newsletter authoritative authentication gate', () => {
       footer.dispatchEvent(new win.Event('submit', { cancelable: true }));
       footer.dispatchEvent(new win.Event('submit', { cancelable: true })); await flush();
       expect(complete).toHaveBeenCalledTimes(1);
-      expect(JSON.parse(complete.mock.calls[0][0].body)).toEqual({ email: 'member@example.test' });
+      expect(JSON.parse(complete.mock.calls[0][0].body)).toEqual({ email: 'member@example.test', newsletterSubscribed: true });
       expect(win.document.querySelector('.newsletter-modal-title').textContent).not.toBe('Suscripción completada');
       expect(win.document.getElementById('authOverlay').classList).not.toContain('is-open');
       pending.resolve({ ok: true, json: async () => ({ status: 'subscribed' }) }); await flush();
@@ -529,7 +529,7 @@ describe('newsletter continuation reuses normal registration', () => {
       form.dispatchEvent(new win.Event('submit', { cancelable: true }));
       await flush();
       expect(win.CRONOX_API.register).toHaveBeenCalledTimes(1);
-      expect(win.CRONOX_API.register).toHaveBeenCalledWith({ firstName: 'Persona', email: 'member@example.test', password: 'ValidPassword1!', registrationSource: 'newsletter' });
+      expect(win.CRONOX_API.register).toHaveBeenCalledWith({ firstName: 'Persona', email: 'member@example.test', password: 'ValidPassword1!', registrationSource: 'newsletter', newsletterSubscribed: true });
       pending.resolve({ id: 1, email: 'member@example.test', role: 'USER', newsletterSubscribed: true });
       await flush();
       expect(win.CRONOX_AUTH_STATE).toBe('authenticated');

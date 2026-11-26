@@ -6,6 +6,7 @@ import { ensureAccountWelcome } from '../users/account-welcome';
 import { ACCOUNT_FIRST_NAME_MAX, ACCOUNT_LAST_NAME_MAX } from '../common/account-name-policy';
 import { PasswordSetupScenario } from '../common/password-setup-context';
 import { lockAccountCredentials } from '../auth/account-credentials';
+import { newsletterVeto, saveNewsletterPreference } from '../newsletter/newsletter-preference';
 
 type CompletedCheckoutIdentity = {
   id?: string;
@@ -73,12 +74,14 @@ export class GuestOrderAccountService {
     // concurrently, Prisma raises P2002 and OrdersService retries the complete
     // order transaction, which then resolves this row as existing.
     const subscription = await tx.newsletterSubscription.findUnique({ where: { email } });
+    const preference = checkout.id ? await tx.auditLog.findFirst({ where: { targetType: 'CHECKOUT_NEWSLETTER_PREFERENCE', targetId: checkout.id }, orderBy: { id: 'desc' } }) : null;
+    const choice = (preference?.metadata as any)?.subscribed;
     if (subscription?.userId) throw new BadRequestException('NEWSLETTER_ACCOUNT_LINK_CONFLICT');
     const user = await tx.user.create({
       data: {
         email,
         password: null,
-        newsletterSubscribed: Boolean(subscription?.subscribedAt),
+        newsletterSubscribed: typeof choice === 'boolean' ? false : Boolean(subscription?.subscribedAt) && !await newsletterVeto(tx, email),
         role: Role.USER,
         accountState: UserAccountState.ACTIVE,
         name: fullName || null,
@@ -88,6 +91,7 @@ export class GuestOrderAccountService {
       select: { id: true },
     });
     if (subscription) await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
+    if (typeof choice === 'boolean') await saveNewsletterPreference(tx, email, choice, 'GUEST_CHECKOUT_ACCOUNT', user.id);
 
     const address = this.toSavedAddress(shipping ?? billing);
     await ensureAccountWelcome(tx, user.id, true, checkout.id);

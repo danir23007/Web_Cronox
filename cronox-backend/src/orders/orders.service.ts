@@ -590,6 +590,7 @@ export class OrdersService {
   async createCheckoutSnapshotForOwner(
     owner: CheckoutOwner,
     params: {
+      newsletterSubscribed?: boolean;
       shippingMethod: ShippingMethodCode;
       promoCode?: string;
       shippingAddress?: Record<string, unknown>;
@@ -792,6 +793,10 @@ export class OrdersService {
           include: { items: true },
         });
 
+        if (resolvedOwner.userId == null && typeof params.newsletterSubscribed === 'boolean') {
+          await tx.auditLog.create({ data: { action: 'CHECKOUT_NEWSLETTER_CHOICE', targetType: 'CHECKOUT_NEWSLETTER_PREFERENCE', targetId: created.id,
+            reason: 'GUEST_CHECKOUT', metadata: { subscribed: params.newsletterSubscribed, explicit: true, version: 1 } } });
+        }
         await this.reserveStockForCheckoutSnapshot(
           tx,
           created.id,
@@ -2534,6 +2539,7 @@ export class OrdersService {
     owner: CheckoutOwner,
     preview: CheckoutPreview,
     params: {
+      newsletterSubscribed?: boolean;
       shippingMethod: ShippingMethodCode;
       promoCode?: string;
       shippingAddress?: Record<string, unknown>;
@@ -2541,6 +2547,7 @@ export class OrdersService {
     },
   ): string {
     const fingerprintInput = {
+      ...(owner.userId == null && typeof params.newsletterSubscribed === 'boolean' ? { newsletterSubscribed: params.newsletterSubscribed } : {}),
       owner:
         owner.userId != null
           ? `user:${owner.userId}`

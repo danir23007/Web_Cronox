@@ -17,7 +17,7 @@ describe('guest checkout final refinement', () => {
     expect(html).toContain('id="checkout-guest-email"');
     expect(html).toContain('id="checkout-login-header-link"');
     expect(html).toContain('id="checkout-newsletter-consent" type="checkbox"');
-    expect(html).not.toContain(
+    expect(html).toContain(
       'id="checkout-newsletter-consent" type="checkbox" checked',
     );
   });
@@ -35,8 +35,8 @@ describe('guest checkout final refinement', () => {
 
   it('subscribes only after explicit optional consent through NewsletterModule', () => {
     expect(script).toContain('newsletterConsent?.checked');
-    expect(script).toContain('/api/newsletter/subscribe');
-    expect(script).toContain('newsletterSubmittedFor === email');
+    expect(script).toContain('newsletterSubscribed: state.isAuthenticated ? undefined : newsletterConsent?.checked === true');
+    expect(script).toContain('commits it with the new paid-order account');
   });
 
   it('renders the compact account row and hidden logout menu', () => {

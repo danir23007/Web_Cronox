@@ -1,6 +1,7 @@
 import { Prisma, User } from '@prisma/client';
 import { normalizeEmail } from '../common/email';
 import { ensureAccountWelcome } from '../users/account-welcome';
+import { newsletterVeto } from './newsletter-preference';
 
 /** Caller owns the newsletter-email lock. Link existing accounts only. */
 export async function linkNewsletterUser(tx: Prisma.TransactionClient, email: string, consent: boolean) {
@@ -9,7 +10,7 @@ export async function linkNewsletterUser(tx: Prisma.TransactionClient, email: st
   if (matches.length > 1) throw new Error('Ambiguous newsletter account: manual review required');
   let user = matches[0];
   if (!user) return { user: null };
-  if (consent && !user.newsletterSubscribed) {
+  if (consent && !user.newsletterSubscribed && !await newsletterVeto(tx, normalized)) {
     user = await tx.user.update({ where: { id: user.id }, data: { newsletterSubscribed: true } });
   }
   return { user: await ensureAccountWelcome(tx, user.id) };

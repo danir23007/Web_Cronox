@@ -44,7 +44,7 @@ export class PublicKeyScreenController {
   @Post('preregister')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   preregister(@Body() dto: PreRegisterDto) {
-    return this.keyScreen.preregister(dto.email);
+    return this.keyScreen.preregister(dto.email, dto.newsletterSubscribed);
   }
 }
 

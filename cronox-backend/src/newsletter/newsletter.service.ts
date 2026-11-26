@@ -1,9 +1,10 @@
-import { ForbiddenException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma, User } from '@prisma/client';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsletterSettingsService } from './newsletter-settings.service';
 import { normalizeEmail } from '../common/email';
+import { newsletterVeto, saveNewsletterPreference } from './newsletter-preference';
 
 export type SubscriptionResult = { status: 'accepted'; httpStatus: number; confirmation?: 'welcome' | 'existing_account' | 'subscribed' };
 export type ExistingSubscriptionClaimResult = { status: 'claimed'; code?: string } | { status: 'not_subscribed' };
@@ -34,8 +35,7 @@ export class NewsletterService {
         const normalized = email.trim().toLowerCase();
         const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalized } });
         const user = await tx.user.findUnique({ where: { email: normalized } });
-        if (!subscription?.subscribedAt || !user) return { status: 'not_subscribed' };
-        await tx.user.update({ where: { id: user.id }, data: { newsletterSubscribed: true } });
+        if (!subscription?.subscribedAt || !user?.newsletterSubscribed || await newsletterVeto(tx, normalized)) return { status: 'not_subscribed' };
         return { status: 'claimed' };
       });
     } catch {
@@ -54,15 +54,17 @@ export class NewsletterService {
   }
 
   /** Existing accounts opt in only after authentication of the same address. */
-  async completeRegistration(userId: number, email: string) {
+  async completeRegistration(userId: number, email: string, preference?: boolean) {
+    if (preference !== true) throw new ForbiddenException('Indica expresamente si deseas recibir novedades y promociones de CRONOX.');
     const normalized = normalizeEmail(email);
     await this.prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalized}))`;
       const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user || normalizeEmail(user.email) !== normalized || user.accountState !== 'ACTIVE' || !['USER', 'FRIEND'].includes(user.role)) {
+      if (!user || normalizeEmail(user.email) !== normalized || user.accountState !== 'ACTIVE') {
         throw new ForbiddenException('Inicia sesión con el correo que quieres suscribir.');
       }
       const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalized } });
+      if (await newsletterVeto(tx, normalized)) throw new ForbiddenException('Se conserva tu baja o rechazo de correos comerciales.');
       if (subscription?.userId && subscription.userId !== user.id) {
         throw new ServiceUnavailableException({ code: 'NEWSLETTER_ACCOUNT_LINK_CONFLICT' });
       }
@@ -72,6 +74,7 @@ export class NewsletterService {
         update: { userId, subscribedAt: subscription?.subscribedAt ?? new Date() },
       });
       await tx.user.update({ where: { id: userId }, data: { newsletterSubscribed: true } });
+      await saveNewsletterPreference(tx, normalized, true, 'AUTHENTICATED_NEWSLETTER_SIGNUP', userId);
       // The account lifecycle already owns welcome delivery and its personal
       // code. Signing in to subscribe must not create another of either.
     });
@@ -79,7 +82,8 @@ export class NewsletterService {
   }
 
   /** Checkout opt-in retains its existing independent purchase flow. */
-  async subscribe(email: string): Promise<SubscriptionResult> {
+  async subscribe(email: string, preference?: boolean): Promise<SubscriptionResult> {
+    if (preference !== true) throw new BadRequestException('Se requiere una elección explícita para suscribirse.');
     const normalized = normalizeEmail(email);
     const confirmation = await this.scheduleSubscription(normalized);
     return { status: 'accepted', httpStatus: 202, confirmation };
@@ -110,6 +114,9 @@ export class NewsletterService {
       return await this.prisma.$transaction(async tx => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + email}))`;
         const now = new Date();
+        // A guest purchase cannot opt an existing account back in.
+        const existing = await tx.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
+        if (await newsletterVeto(tx, email) || (existing && !existing.newsletterSubscribed)) return 'existing_account';
         const subscription = await tx.newsletterSubscription.upsert({
           where: { email }, create: { email, subscribedAt: now },
           update: {},
@@ -119,6 +126,7 @@ export class NewsletterService {
             subscribedAt: now, verificationTokenHash: null, verificationExpiresAt: null,
           } });
         }
+        await saveNewsletterPreference(tx, email, true, 'GUEST_CHECKOUT_OPT_IN');
         const matches = await tx.$queryRaw<Pick<User, 'id' | 'email' | 'role' | 'accountState' | 'newsletterSubscribed'>[]>`SELECT id, email, role, "accountState", "newsletterSubscribed" FROM "User" WHERE lower(btrim(email)) = ${email} LIMIT 2`;
         if (matches.length > 1) throw new ServiceUnavailableException({ code: 'NEWSLETTER_ACCOUNT_AMBIGUOUS' });
         const user = matches[0];

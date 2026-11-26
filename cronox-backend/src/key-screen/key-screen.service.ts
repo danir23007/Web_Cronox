@@ -1,4 +1,5 @@
 import { ensureAccountWelcome } from '../users/account-welcome';
+import { saveNewsletterPreference } from '../newsletter/newsletter-preference';
 import {
   BadRequestException,
   ConflictException,
@@ -346,7 +347,7 @@ export class KeyScreenService {
     return this.prisma.websiteMediaAsset.create({ data: uploaded });
   }
 
-  async preregister(rawEmail: string) {
+  async preregister(rawEmail: string, newsletterSubscribed?: boolean) {
     const email = normalizeEmail(rawEmail);
     let userId: number;
     try {
@@ -379,6 +380,7 @@ export class KeyScreenService {
           },
           select: { id: true },
         });
+        if (typeof newsletterSubscribed === 'boolean') await saveNewsletterPreference(tx, email, newsletterSubscribed, 'KEY_SCREEN_REGISTRATION', user.id);
         await tx.preRegistration.create({
           data: { userId: user.id, screenId: active.activeScreenId },
         });

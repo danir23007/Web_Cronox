@@ -98,7 +98,8 @@ export class AuthService {
           name: fullName || undefined,
           firstName: dto.firstName,
           lastName: dto.lastName,
-          ...(dto.registrationSource === 'newsletter' ? { newsletterSubscribed: true } : {}),
+          ...(dto.newsletterSubscribed !== undefined ? { newsletterSubscribed: dto.newsletterSubscribed } : {}),
+          newsletterSource: dto.registrationSource === 'event' ? 'EVENT_REGISTRATION' : dto.registrationSource === 'newsletter' ? 'NEWSLETTER_REGISTRATION' : 'ACCOUNT_REGISTRATION',
           ...(dto.registrationSource === 'event' ? { eventRegistration: true } : {}),
         });
     } catch (error) {

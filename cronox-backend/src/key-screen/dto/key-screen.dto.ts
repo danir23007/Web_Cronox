@@ -197,6 +197,9 @@ export class SetKeyScreenExpirationDto {
 }
 
 export class PreRegisterDto {
+  @IsOptional()
+  @IsBoolean()
+  newsletterSubscribed?: boolean;
   @Transform(trimmed)
   @IsEmail()
   @MaxLength(254)

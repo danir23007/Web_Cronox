@@ -15,6 +15,9 @@ import {
 import { ShippingMethodCode } from '../../common/enums/shipping-method-code.enum';
 
 export class CreatePaymentIntentDto {
+  @IsOptional()
+  @IsBoolean()
+  newsletterSubscribed?: boolean;
   // Required at the HTTP boundary; optional TS shape keeps internal legacy
   // fixtures source-compatible. Public clients must own a checkout presence.
   @IsString()

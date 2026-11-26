@@ -2619,7 +2619,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     const response = await fetch(apiEndpoint('/api/newsletter/complete-registration'), {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, newsletterSubscribed: true }),
     });
     const result = await response.json().catch(() => null);
     if (!response.ok || result?.status !== 'subscribed') {
@@ -2732,21 +2732,22 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       if (Array.from(password).length < 7 || new TextEncoder().encode(password).length > 72) {
         throw new Error('La contrase\u00f1a debe tener al menos 7 caracteres y no superar 72 bytes UTF-8.');
       }
-      const user = await window.CRONOX_API.register({ firstName, ...(fromNewsletter ? { registrationSource: 'newsletter' } : { lastName }), email, password });
+      const newsletterChoice = registerForm.querySelector('[name="newsletterSubscribed"]')?.checked === true;
+      const user = await window.CRONOX_API.register({ firstName, ...(fromNewsletter ? { registrationSource: 'newsletter' } : { lastName }), email, password, newsletterSubscribed: newsletterChoice });
       if (user?.verificationRequired === true) {
         registerErrorMessage = '';
         setAuthMessage(user.message || 'Comprueba tu correo para verificar la cuenta y establecer tu contraseña.');
         return;
       }
       if (!user) throw new Error('No se ha podido crear la cuenta.');
-      if (registrationContext?.signup && user.newsletterSubscribed !== true) {
+      if (registrationContext?.signup && newsletterChoice && user.newsletterSubscribed !== true) {
         throw new Error('No hemos podido confirmar la suscripción. Inicia sesión con este correo para completarla.');
       }
       publishAuthState(user);
       await refreshUserDependentUI();
       if (newsletterRegistration === registrationContext) {
         closeAuthModal();
-        if (registrationContext?.signup) showNewsletterCompleted();
+        if (registrationContext?.signup && newsletterChoice) showNewsletterCompleted();
       }
     } catch (err) {
       console.error('[AUTH] register error', err);
@@ -2971,6 +2972,14 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     authDialog = authOverlay?.querySelector('.cronox-auth__dialog') || null;
     loginForm = document.getElementById('authLoginForm');
     registerForm = document.getElementById('authRegisterForm');
+    if (registerForm && !registerForm.querySelector('[name="newsletterSubscribed"]')) {
+      const label = document.createElement('label');
+      label.className = 'cronox-auth__newsletter';
+      label.style.cssText = 'display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.5;text-align:left';
+      label.innerHTML = '<input type="checkbox" name="newsletterSubscribed" checked style="width:18px;min-width:18px;height:18px;margin:3px 0 0;accent-color:#000"><span>Quiero recibir novedades y promociones de CRONOX. Puedo desmarcar esta opción y darme de baja después.</span>';
+      registerForm.querySelector('button[type="submit"]')?.before(label);
+    }
+    registerForm?.querySelector('[data-auth-separate-newsletter]')?.remove();
     messageEl = document.getElementById('authMessage');
     authTitle = document.getElementById('authTitle');
     loginEmail = document.getElementById('authLoginEmail');

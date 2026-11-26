@@ -21,9 +21,9 @@ describe('direct event registration', () => {
     expect(doc.querySelector('#authRegisterLastName')?.hasAttribute('required')).toBe(true);
     expect(doc.querySelector('#authOverlay')?.getAttribute('aria-hidden')).toBe('false');
     expect(doc.querySelector('.newsletter-modal-overlay')).toBeNull();
-    expect(doc.querySelector('input[type=checkbox]:checked')).toBeNull();
+    expect(doc.querySelector('input[name=newsletterSubscribed]:checked')).not.toBeNull();
   });
-  it('uses the shared handlers without fetching a second form, recording newsletter consent or scheduling its popup', async () => {
+  it.each([true, false])('submits newsletter choice=%s through the shared event form without scheduling its popup', async choice => {
     const dom = new JSDOM(html(), { url: 'https://cronox.es/registro-evento', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: new VirtualConsole() });
     const win = dom.window as any;
     win.TextEncoder = TextEncoder; win.scrollTo = () => {};
@@ -37,9 +37,10 @@ describe('direct event registration', () => {
       win.eval(read('assets/event-registration.js')); win.eval(read('assets/app.js')); await flush();
       for (const [field, value] of Object.entries({ FirstName: 'Usuario', LastName: 'Prueba', Email: 'fixture@example.test', Password: 'SecurePassword1!' }))
         win.document.getElementById('authRegister' + field).value = value;
+      win.document.querySelector('[name=newsletterSubscribed]').checked = choice;
       win.document.getElementById('authRegisterForm').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })); await flush();
       expect(register).toHaveBeenCalledWith(expect.objectContaining({ registrationSource: 'event', lastName: 'Prueba' }));
-      expect(register.mock.calls[0][0]).not.toHaveProperty('newsletterSubscribed');
+      expect(register.mock.calls[0][0].newsletterSubscribed).toBe(choice);
       expect(schedule).not.toHaveBeenCalled();
       expect(win.fetch.mock.calls.some(([url]: any[]) => String(url).includes('auth-modal.html'))).toBe(false);
       expect(win.document.getElementById('authMessage').textContent).toContain('Existing email');

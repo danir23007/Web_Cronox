@@ -189,7 +189,7 @@ describe('commercial withdrawal and preference security', () => {
     expect(db.mailboxSuppression.findUnique).not.toHaveBeenCalled();
   });
   it('authenticated preferences ignore another account ID and update only the session account', async () => {
-    const tx = { user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ email: 'owner@example.test' }), update: jest.fn() }, mailboxSuppression: { upsert: jest.fn() } };
+    const tx = { $executeRaw: jest.fn(), auditLog: { create: jest.fn() }, user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ email: 'owner@example.test' }), update: jest.fn() }, mailboxSuppression: { upsert: jest.fn() } };
     const controller = new MailPreferencesController({ $transaction: (fn: any) => fn(tx) } as any);
     await controller.unsubscribe({ user: { id: 7 }, body: { userId: 99, email: 'other@example.test' } } as any);
     expect(tx.user.update).toHaveBeenCalledWith({ where: { id: 7 }, data: { newsletterSubscribed: false } });

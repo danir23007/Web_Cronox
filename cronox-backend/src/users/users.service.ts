@@ -1,4 +1,5 @@
 import { recordEventRegistration } from './event-registration';
+import { newsletterVeto, saveNewsletterPreference } from '../newsletter/newsletter-preference';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role, User, UserAccountState } from '@prisma/client';
 import { randomBytes } from 'crypto';
@@ -43,6 +44,7 @@ export class UsersService {
     role?: Role;
     memberCode?: string;
     newsletterSubscribed?: boolean;
+    newsletterSource?: string;
     firstOrderDiscountCode?: string;
     firstOrderDiscountUsed?: boolean;
   }) {
@@ -58,13 +60,14 @@ export class UsersService {
       }
       const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalizeEmail(data.email) } });
       if (subscription?.userId) throw new ConflictException('La suscripción requiere revisión antes de crear la cuenta.');
-      const { memberCode, eventRegistration, ...userData } = data;
+      const { memberCode, eventRegistration, newsletterSource, ...userData } = data;
+      const inheritedConsent = Boolean(subscription?.subscribedAt) && !await newsletterVeto(tx, data.email);
       const ensuredCode = memberCode ?? (await getNextSequentialMemberCode(tx));
 
       const user = await tx.user.create({
         data: {
           ...userData,
-          newsletterSubscribed: eventRegistration ? false : Boolean(subscription?.subscribedAt) || Boolean(userData.newsletterSubscribed),
+          newsletterSubscribed: data.newsletterSubscribed === undefined ? inheritedConsent : false,
           ...(eventRegistration ? { role: Role.USER } : {}),
           accountState: UserAccountState.ACTIVE,
           registrationClaimable: false,
@@ -72,15 +75,10 @@ export class UsersService {
           memberCode: ensuredCode,
         },
       });
-      if (!eventRegistration && data.newsletterSubscribed) {
-        // Account, consent, personal code and welcome outbox share this commit.
-        // Preserve historical consent/verification/delivery metadata on retries.
-        await tx.newsletterSubscription.upsert({
-          where: { email: user.email },
-          create: { email: user.email, userId: user.id, subscribedAt: new Date() },
-          update: { userId: user.id, subscribedAt: subscription?.subscribedAt ?? new Date() },
-        });
-      } else if (subscription) {
+      if (typeof data.newsletterSubscribed === 'boolean') {
+        await saveNewsletterPreference(tx, user.email, data.newsletterSubscribed, newsletterSource || 'ADMIN_ACCOUNT_CREATION', user.id);
+      }
+      if (subscription) {
         await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
       }
       if (eventRegistration) await recordEventRegistration(tx, user);

@@ -6,6 +6,7 @@ import {
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
+  IsBoolean,
   IsIn,
   IsNotEmpty,
   IsOptional,
@@ -18,6 +19,9 @@ import {
 const NAME_REGEX = /^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]+$/;
 
 export class RegisterDto {
+  @IsOptional()
+  @IsBoolean()
+  newsletterSubscribed?: boolean;
   // Explicit newsletter registration: consent is committed with the new account.
   // This never verifies an address or authorizes claiming an existing account.
   @IsOptional()

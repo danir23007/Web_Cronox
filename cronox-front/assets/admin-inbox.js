@@ -678,10 +678,13 @@
       if (exp) exp.disabled = sending || !plan || !form.elements.familyId.value || !values().circles.length;
     };
     const renderPlan = result => {
-      host.querySelector('[data-audience-count]').textContent = `${result.count} destinatarios válidos y únicos`;
+      host.querySelector('[data-audience-count]').textContent = `${result.totalUsers ?? result.count} usuarios en los círculos seleccionados · ${result.count} destinatarios válidos y únicos · ${result.excluded?.length || 0} excluidos`;
+      const reasonLabel = reason => ({ NO_SUBSCRIPTION_EVIDENCE: 'Sin evidencia suficiente de suscripción vigente', SUPPRESSION_UNSUBSCRIBED: 'Baja expresa', SUPPRESSION_DECLINED: 'Rechazo expreso', SUPPRESSION_CONFIRMED_HARD_BOUNCE: 'Rebote permanente confirmado', INVALID_EMAIL: 'Dirección no válida', DUPLICATE_EMAIL: 'Dirección duplicada', AMBIGUOUS_CIRCLE: 'Dirección vinculada a círculos distintos', ACCOUNT_BLOCKED: 'Cuenta bloqueada', ACCOUNT_DELETED: 'Cuenta eliminada' }[reason] || reason);
+      const exclusionReview = result.excluded?.length ? `<details data-audience-exclusions><summary>Revisar ${result.excluded.length} excluidos</summary><ul>${Object.entries(result.exclusionCounts || {}).map(([reason, count]) => `<li>${esc(reasonLabel(reason))}: ${esc(count)}</li>`).join('')}</ul><ul>${result.excluded.map(row => `<li style="overflow-wrap:anywhere">${esc(row.email)} · Círculo ${esc(row.circle)} · ${esc(reasonLabel(row.reason))}</li>`).join('')}</ul></details>` : '';
       const target = host.querySelector('[data-campaign-review]');
       target.innerHTML = `${result.blocked.map(x => `<p class="mail-notice">${esc(x)}</p>`).join('')}${result.previews.map(p => `<details><summary>Círculo ${p.circle} · ${p.count} destinatarios${p.missing ? ' · Falta la versión' : ''}</summary>${p.missing ? '' : `<p>Asunto: ${esc(p.subject)}</p><iframe data-preview-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Vista previa de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe>`}</details>`).join('')}<p class="mail-muted">${esc(result.policy.reasons.join(' '))}</p>`;
       result.previews.forEach(p => { const frame = target.querySelector(`[data-preview-circle="${p.circle}"]`); if (frame) frame.srcdoc = p.html || ''; });
+      target.insertAdjacentHTML('afterbegin', exclusionReview);
     };
     const refreshAudience = async () => {
       if (!current()) return;

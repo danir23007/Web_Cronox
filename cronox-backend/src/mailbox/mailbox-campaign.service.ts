@@ -29,6 +29,7 @@ import { versionFingerprint } from './mailbox-retention.service';
 import { MailboxTrackingService } from './mailbox-tracking.service';
 import { composeApplicationMail } from '../email/mail-footer-composition';
 import { mailPreferenceToken, readMailPreferenceToken } from '../email/mail-preference-token';
+import { saveNewsletterPreference } from '../newsletter/newsletter-preference';
 
 @Injectable()
 export class MailboxCampaignService {
@@ -141,32 +142,19 @@ export class MailboxCampaignService {
   }
   async resolveRecipients(selected: number[], tx: any = this.db) {
     const users = await tx.user.findMany({
-      where: { circleLevel: { in: [1, 2, 3, 4, 5] }, accountState: 'ACTIVE',
-        role: { in: ['USER', 'FRIEND'] }, newsletterSubscribed: true },
-      select: { email: true, name: true, circleLevel: true },
+      where: { circleLevel: { in: [1, 2, 3, 4, 5] } },
+      select: { id: true, email: true, name: true, circleLevel: true, accountState: true, newsletterSubscribed: true },
+      orderBy: { id: 'asc' },
     });
-    const suppressed = await tx.mailboxSuppression.findMany({ select: { email: true } });
-    return campaignAudience(users, suppressed.map((v: any) => v.email), selected);
+    const suppressed = await tx.mailboxSuppression.findMany({ select: { email: true, reason: true } });
+    return campaignAudience(users, suppressed, selected);
   }
   async recipients(selected: number[]) {
     return (await this.resolveRecipients(circles(selected))).recipients.map(r => r.email);
   }
   async eligible(email: string, circle?: number) {
-    if (
-      !circle ||
-      (await this.db.mailboxSuppression.findUnique({ where: { email } }))
-    )
-      return false;
-    const users = await this.db.user.findMany({
-      where: {
-        email: { equals: email, mode: 'insensitive' },
-        accountState: 'ACTIVE',
-        role: { in: ['USER', 'FRIEND'] },
-        newsletterSubscribed: true,
-      },
-      select: { circleLevel: true },
-    });
-    return users.length > 0 && users.every((u) => u.circleLevel === circle);
+    if (!circle) return false;
+    return (await this.resolveRecipients([circle])).recipients.some(r => r.email === canonicalRecipient(email));
   }
   async assertPrivateContent(d: any) {
     // A circle message has one shared body: recipient variables/lists must never
@@ -212,7 +200,6 @@ export class MailboxCampaignService {
       candidates.size &&
       (await this.db.user.findFirst({
         where: {
-          role: { in: ['USER', 'FRIEND'] },
           OR: [...candidates].map((email) => ({
             email: { equals: email, mode: 'insensitive' },
           })),
@@ -413,6 +400,9 @@ export class MailboxCampaignService {
       blocked: uniqueBlocked,
       previewHash: hash,
       count: audience.recipients.length,
+      totalUsers: audience.totalUsers,
+      excluded: audience.excluded,
+      exclusionCounts: audience.exclusionCounts,
       circles: selected,
     };
   }
@@ -458,6 +448,9 @@ export class MailboxCampaignService {
       { header: 'Versión de plantilla', key: 'templateName', width: 40 }];
     // Plain strings are data, never ExcelJS formula objects.
     plan.recipients.forEach(r => sheet.addRow(r));
+    const exclusions = workbook.addWorksheet('Excluidos');
+    exclusions.columns = [{ header: 'Correo electrónico', key: 'email', width: 40 }, { header: 'Círculo', key: 'circle', width: 12 }, { header: 'Motivo', key: 'reason', width: 42 }];
+    plan.excluded.forEach(r => exclusions.addRow(r));
     await this.access.box(actor, mailboxId, true);
     return workbook.xlsx.writeBuffer();
   }
@@ -736,6 +729,7 @@ export class MailboxCampaignService {
     }
     if (!email) throw new BadRequestException('MAILBOX_INVALID_UNSUBSCRIBE');
     await this.db.$transaction(async (tx) => {
+      await saveNewsletterPreference(tx, email, false, 'CAMPAIGN_UNSUBSCRIBE');
       await tx.mailboxSuppression.upsert({
         where: { email },
         create: { email, reason: 'UNSUBSCRIBED' },

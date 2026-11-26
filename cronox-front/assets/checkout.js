@@ -328,7 +328,6 @@
   let activeProfile = null;
   let savedDefaultAddress = null;
   let newsletterSubmittedFor = '';
-  let newsletterSubscriptionPending = null;
   let newsletterPurchaseReference = null;
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanText(value));
@@ -1859,40 +1858,11 @@
   };
 
   const subscribeNewsletterIfRequested = async () => {
-    if (newsletterSubscriptionPending) return newsletterSubscriptionPending;
+    // Presentation only. The server records the explicit choice in the owned
+    // checkout snapshot and commits it with the new paid-order account.
     const email = getCheckoutEmail();
-    if (
-      state.isAuthenticated ||
-      !newsletterConsent?.checked ||
-      !isValidEmail(email) ||
-      newsletterSubmittedFor === email
-    ) {
-      return;
-    }
-    newsletterSubscriptionPending = (async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/newsletter/subscribe`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(await getCsrfHeaders()),
-          },
-          body: JSON.stringify({ email }),
-        });
-        const result = await response.json().catch(() => null);
-        if (response.status === 202 && result?.status === 'accepted') {
-          newsletterSubmittedFor = email;
-          rememberNewsletterCompletion();
-        }
-      } catch (error) {
-        console.warn('[CRONOX checkout newsletter]', {
-          event: 'checkout_newsletter_subscription_failed',
-          type: error instanceof Error ? error.name : 'unexpected',
-        });
-      }
-    })();
-    try { await newsletterSubscriptionPending; } finally { newsletterSubscriptionPending = null; }
+    newsletterSubmittedFor = !state.isAuthenticated && newsletterConsent?.checked && isValidEmail(email) ? email : '';
+    rememberNewsletterCompletion();
   };
 
   const expressRates = () => state.shippingMethods.map(method => ({
@@ -2602,6 +2572,7 @@
           promoCode: requestedPromoCode,
           guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(),
           shippingAddress: requestedShippingAddress,
+          newsletterSubscribed: state.isAuthenticated ? undefined : newsletterConsent?.checked === true,
           ...(expressCheckout ? { expressCheckout: true } : {}),
         }),
       });
@@ -2646,7 +2617,8 @@
       window.dispatchEvent(new CustomEvent('cronox:checkout-payment-ready', { detail: {
         paymentIntentId: nextPaymentIntentId,
         payload: { ...checkoutReservation.identity(), shippingMethod: requestedShippingMethod, promoCode: requestedPromoCode,
-          guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(), shippingAddress: requestedShippingAddress },
+          guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(), shippingAddress: requestedShippingAddress,
+          newsletterSubscribed: state.isAuthenticated ? undefined : newsletterConsent?.checked === true },
       } }));
       return true;
     } catch (error) {
@@ -2986,6 +2958,10 @@
     guestEmailInput?.addEventListener('change', () => {
       if (lastInputValue.get(guestEmailInput) === guestEmailInput.value) return;
       lastInputValue.set(guestEmailInput, guestEmailInput.value);
+      schedulePaymentIntentRefreshFromShipping(0);
+    });
+    newsletterConsent?.addEventListener('change', () => {
+      newsletterSubmittedFor = '';
       schedulePaymentIntentRefreshFromShipping(0);
     });
 

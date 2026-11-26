@@ -15,6 +15,6 @@ export function renderEventRegistration(page: string, sharedAuth: string, homepa
   return homepage.replace('</head>', head + '</head>')
     .replace(/<body([^>]*)>/, '<body$1 data-registration-source="event" data-event-auth="pending"><div id="eventRegistrationBackground" inert aria-hidden="true">')
     .replace(/<div class="newsletter-modal-overlay"[\s\S]*?<\/div>\s*<\/div>/, '')
-    .replace(/<script src="assets\/app(?:\.min)?\.js[^" ]*" defer><\/script>/, '<script src="/assets/event-registration.js?v=2" defer></script><script src="/assets/app.js?v=event-register-2" defer></script>')
+    .replace(/<script src="assets\/app(?:\.min)?\.js[^" ]*" defer><\/script>/, '<script src="/assets/event-registration.js?v=2" defer></script><script src="/assets/app.js?v=event-register-3" defer></script>')
     .replace('</body>', '</div>' + auth + '</body>');
 }

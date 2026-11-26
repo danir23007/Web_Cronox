@@ -185,7 +185,7 @@ describe('Express wallets with an initially empty form', () => {
       const event = details();
       handlers.confirm(event); await flush();
       const request = JSON.parse(w.fetch.mock.calls.find(([url]: [string]) => url.includes('create-payment-intent'))[1].body);
-      expect(request).toEqual(expect.objectContaining({ guestEmail: 'wallet@example.test', shippingAddress: expect.objectContaining({ firstName: 'Prueba', lastName: 'Sandbox', postalCode: '28001', line1: 'Calle ficticia 1' }) }));
+      expect(request).toEqual(expect.objectContaining({ guestEmail: 'wallet@example.test', newsletterSubscribed: true, shippingAddress: expect.objectContaining({ firstName: 'Prueba', lastName: 'Sandbox', postalCode: '28001', line1: 'Calle ficticia 1' }) }));
       expect(elements.submit.mock.invocationCallOrder[0]).toBeLessThan(w.fetch.mock.invocationCallOrder[0]);
       expect(stripe.confirmPayment).toHaveBeenCalledTimes(1);
       expect(express.mount).toHaveBeenCalledTimes(1); expect(payment.mount).toHaveBeenCalledTimes(1);
